@@ -1,0 +1,285 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #080808;
+  --bg-surface: #111111;
+  --bg-raised: #1a1a1a;
+  --border-default: #2a2a2a;
+  --border-accent: #3a3a3a;
+  --gold: #c9a84c;
+  --gold-muted: #999999;
+  --text-primary: #f0f0f0;
+  --text-secondary: #888888;
+  --text-disabled: #555555;
+  --danger: #8b2020;
+  --approved: #2a5a2a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-im-fell), "IM Fell English", serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-cinzel), serif;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 2px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gold);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes typingDot {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes scoreFill {
+  from { width: 0%; }
+}
+
+@keyframes flame {
+  0%, 100% { transform: scale(0.9); }
+  50% { transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-pulse-live {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.animate-score-fill {
+  animation: scoreFill 0.8s ease-out forwards;
+  animation-delay: 0.2s;
+}
+
+.animate-flame {
+  animation: flame 2s ease-in-out infinite;
+}
+
+/* Typing indicator dots */
+.typing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--text-secondary);
+  animation: typingDot 1.4s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* Diamond divider */
+.diamond-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--border-default);
+}
+.diamond-divider::before,
+.diamond-divider::after {
+  content: "";
+  flex: 1;
+  height: 0.5px;
+  background: var(--border-default);
+}
+.diamond-divider .diamond {
+  width: 8px;
+  height: 8px;
+  background: var(--gold);
+  transform: rotate(45deg);
+}
+
+/* Button styles */
+@layer components {
+  .btn-primary {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: var(--font-cinzel), serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 10px 28px;
+    border-radius: 0;
+    cursor: pointer;
+    transition: all 200ms ease;
+  }
+  .btn-primary:hover {
+    background: rgba(201, 168, 76, 0.08);
+    border-color: #d4b85c;
+  }
+  .btn-primary:active {
+    background: rgba(201, 168, 76, 0.15);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: 1px solid var(--border-default);
+    color: var(--text-secondary);
+    font-family: var(--font-cinzel), serif;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    padding: 10px 28px;
+    border-radius: 0;
+    cursor: pointer;
+    transition: all 200ms ease;
+  }
+  .btn-ghost:hover {
+    border-color: var(--border-accent);
+    color: var(--text-primary);
+  }
+
+  .input-medieval {
+    background: var(--bg-raised);
+    border: 0.5px solid var(--border-default);
+    border-radius: 0;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-family: var(--font-im-fell), serif;
+    font-size: 14px;
+    width: 100%;
+    transition: all 200ms ease;
+  }
+  .input-medieval:focus {
+    outline: none;
+    border-color: var(--gold);
+    background: #1a1a1a;
+  }
+  .input-medieval::placeholder {
+    color: var(--text-disabled);
+    font-style: italic;
+  }
+
+  /* Card with top gold accent */
+  .card-accent {
+    background: var(--bg-surface);
+    border-top: 1px solid var(--gold);
+    border-radius: 0;
+  }
+
+  /* Legacy aliases */
+  .btn-gold { @apply btn-primary; }
+  .parchment-card { @apply card-accent; }
+}
+
+/* ── Courtroom UI: Phase Banners, Objection Flash, Exhibit Badges ── */
+
+/* Phase transition banner */
+.phase-banner {
+  border-bottom: 0.5px solid var(--border-default);
+  background: var(--bg-surface);
+}
+.phase-banner.phase-verdict {
+  background: rgba(139, 32, 32, 0.1);
+  border-bottom-color: var(--danger);
+}
+
+/* Objection flash animation */
+@keyframes objectionFlash {
+  0% { opacity: 0; transform: scale(0.8); }
+  15% { opacity: 1; transform: scale(1.1); }
+  30% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.95); }
+}
+
+.objection-flash {
+  text-align: center;
+  padding: 12px 0;
+  animation: objectionFlash 2s ease-out forwards;
+  background: linear-gradient(180deg, rgba(139, 32, 32, 0.15) 0%, transparent 100%);
+}
+
+/* Exhibit reference badge */
+.exhibit-badge {
+  font-family: var(--font-jetbrains), monospace;
+  font-size: 9px;
+  color: var(--gold);
+  background: rgba(201, 168, 76, 0.1);
+  border: 0.5px solid rgba(201, 168, 76, 0.3);
+  padding: 1px 6px;
+  letter-spacing: 0.05em;
+}
+
+/* Trial phase progress bar */
+.phase-progress {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+}
+.phase-progress .phase-step {
+  flex: 1;
+  height: 2px;
+  background: var(--border-default);
+  transition: background 0.5s ease;
+}
+.phase-progress .phase-step.active {
+  background: var(--gold);
+}
+.phase-progress .phase-step.completed {
+  background: var(--gold);
+  opacity: 0.5;
+}
+
+/* Courtroom floor layout */
+.courtroom-floor {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr auto;
+  gap: 8px;
+  min-height: 0;
+}
+.courtroom-floor .judge-bench {
+  grid-column: 1 / -1;
+  text-align: center;
+}
+.courtroom-floor .prosecution-table {
+  grid-column: 1;
+}
+.courtroom-floor .defense-table {
+  grid-column: 2;
+}
+.courtroom-floor .exhibit-board {
+  grid-column: 1 / -1;
+}
