@@ -45,22 +45,21 @@ class ArbiterAgent(BaseAgent):
         context: dict,
     ) -> ProceedingEntry:
         prompt = (
-            "All evidence has been presented. Review the full transcript "
-            "and issue your FINAL VERDICT.\n\n"
+            "All evidence has been presented. Issue your FINAL VERDICT.\n\n"
             f"Evidence summary:\n{evidence_summary}\n\n"
             f"Full transcript:\n{transcript}\n\n"
-            "For EACH finding, rule:\n"
+            "For EACH finding in the evidence summary, rule individually:\n"
+            "- State the finding ID and line range\n"
             "- Status: CONFIRMED, DISMISSED, or DISPUTED\n"
-            "- Severity: critical, high, medium, low, or info\n"
-            "- Reasoning: which argument won and why\n\n"
-            "Then provide overall scores:\n"
-            "- Security (0-10)\n"
-            "- Performance (0-10)\n"
-            "- Maintainability (0-10)\n\n"
-            "End with a definitive ruling: "
-            "APPROVED, APPROVED WITH CONDITIONS, or REJECTED.\n"
+            "- Which specific tool evidence or argument won and why\n\n"
+            "Then provide overall scores with justification:\n"
+            "- Security (0-10): cite confirmed security findings count\n"
+            "- Performance (0-10): cite complexity data\n"
+            "- Maintainability (0-10): cite structural issues\n\n"
+            "End with: APPROVED, APPROVED WITH CONDITIONS, or REJECTED.\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
-            "Keep each item ruling to 2 sentences maximum."
+            "Keep each item ruling to 2 sentences maximum. "
+            "Reference specific finding IDs (e.g., AEGIS-F001) and tool evidence (e.g., bandit B608)."
         )
 
         content, usage = await self._call_llm(

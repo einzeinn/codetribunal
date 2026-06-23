@@ -39,14 +39,31 @@ class AxiomAgent(BaseAgent):
         # Build validation evidence for LLM prompt
         validation_evidence = ValidationDetector.format_patterns(validation_patterns)
 
-        # Cross-examination context
+        # Cross-examination context with prior testimony
         cross_exam_context = ""
         if round_num > 1 and context.get("conflict_clusters"):
             clusters = context["conflict_clusters"]
             relevant = [c for c in clusters if not c.resolved
                         and "AXIOM" in c.agents_involved]
             if relevant:
-                cross_exam_context = "\nCross-examination questions from ARBITER:\n"
+                # Extract AXIOM's own prior testimony to prevent repetition
+                prior_statements = [
+                    p for p in context.get("proceedings", [])
+                    if p.agent == AgentRole.AXIOM
+                ]
+                prior_text = "\n".join(
+                    f"  [Round {p.round_number}]: {p.message[:150]}..."
+                    for p in prior_statements
+                ) if prior_statements else ""
+
+                cross_exam_context = "\nCROSS-EXAMINATION INSTRUCTIONS:\n"
+                if prior_text:
+                    cross_exam_context += (
+                        f"You previously testified:\n{prior_text}\n\n"
+                        "DO NOT repeat these arguments verbatim. "
+                        "Instead, respond ONLY to the new arguments below.\n"
+                    )
+                cross_exam_context += "Prosecution's NEW arguments:\n"
                 for cluster in relevant:
                     other_claims = [
                         f.claim for f in cluster.findings
@@ -58,8 +75,7 @@ class AxiomAgent(BaseAgent):
                     for claim in other_claims:
                         cross_exam_context += (
                             f"  Prosecution claims: {claim}\n"
-                            f"  Is your defense still valid? Provide specific evidence "
-                            f"or concede the point.\n"
+                            f"  Respond with NEW evidence or concede the point.\n"
                         )
 
         # Build AEGIS's claims for AXIOM to counter

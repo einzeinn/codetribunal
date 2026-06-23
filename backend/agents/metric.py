@@ -52,14 +52,30 @@ class MetricAgent(BaseAgent):
                 )
             radon_evidence = "\n".join(radon_lines)
 
-        # Cross-examination context
+        # Cross-examination context with prior testimony
         cross_exam_context = ""
         if round_num > 1 and context.get("conflict_clusters"):
             clusters = context["conflict_clusters"]
             relevant = [c for c in clusters if not c.resolved
                         and "METRIC" in c.agents_involved]
             if relevant:
-                cross_exam_context = "\nCross-examination questions from ARBITER:\n"
+                prior_statements = [
+                    p for p in context.get("proceedings", [])
+                    if p.agent == AgentRole.METRIC
+                ]
+                prior_text = "\n".join(
+                    f"  [Round {p.round_number}]: {p.message[:150]}..."
+                    for p in prior_statements
+                ) if prior_statements else ""
+
+                cross_exam_context = "\nCROSS-EXAMINATION INSTRUCTIONS:\n"
+                if prior_text:
+                    cross_exam_context += (
+                        f"You previously testified:\n{prior_text}\n\n"
+                        "DO NOT repeat these arguments verbatim. "
+                        "Respond ONLY to new questions below.\n"
+                    )
+                cross_exam_context += "Other agents' NEW claims:\n"
                 for cluster in relevant:
                     other_claims = [
                         f.claim for f in cluster.findings
@@ -71,8 +87,7 @@ class MetricAgent(BaseAgent):
                     for claim in other_claims:
                         cross_exam_context += (
                             f"  Another agent claims: {claim}\n"
-                            f"  Does your complexity analysis support or contradict this? "
-                            f"Provide numeric evidence.\\n"
+                            f"  Does your radon data support or contradict? Cite numbers.\n"
                         )
 
         prompt = (
@@ -150,54 +165,3 @@ class MetricAgent(BaseAgent):
             findings=findings,
             line_range=[findings[0].line_start, findings[0].line_end] if findings else None,
         )
-"""
-CodeTribunal - METRIC Agent (The Expert Witness)
-Analyzes performance characteristics and code complexity.
-"""
-
-from .base import (
-    BaseAgent, AgentRole, ProceedingEntry,
-    TokenUsageLog, truncate_transcript, build_transcript,
-)
-from .code_chunker import chunk_code, build_structural_overview, build_chunked_code
-from ..config import settings
-from ..system_prompts import METRIC_SYSTEM_PROMPT
-
-
-class MetricAgent(BaseAgent):
-    # METRIC needs higher max_tokens — dense metric tables often hit
-    # output truncation at 1500 tokens (see: sqlmap automation truncation bug)
-    METRIC_MAX_TOKENS = 2500
-
-    def __init__(self):
-        super().__init__(AgentRole.METRIC, settings.METRIC_MODEL, METRIC_SYSTEM_PROMPT)
-
-    async def process(self, context: dict) -> ProceedingEntry:
-        raw_code = context.get("code_content", "")
-        language = context.get("language", "unknown")
-        round_num = context.get("current_round", 1)
-        transcript = truncate_transcript(build_transcript(context))
-
-        # Semantic chunking: each function/class analyzed independently
-        chunks = chunk_code(raw_code, language)
-        overview = build_structural_overview(chunks)
-        chunked_code = build_chunked_code(chunks)
-
-        prompt = (
-            f"Analyze the performance and complexity of this {language} code.\n\n"
-            f"{overview}\n\n"
-            f"```{language}\n{chunked_code}\n```\n\n"
-        )
-        if transcript:
-            prompt += f"Previous proceedings:\n{transcript}\n\n"
-        prompt += (
-            "Provide ONE key finding only, in 2 sentences maximum. "
-            "Include a complexity rating (1-10) and one specific issue. "
-            "Speak as an expert witness, not a technical report. No bullet points, no emoji."
-        )
-
-        content, usage = await self._call_llm(
-            prompt, temperature=0.5, max_tokens=self.METRIC_MAX_TOKENS,
-        )
-        context.setdefault("token_usage", TokenUsageLog()).record(usage)
-        return self._entry("Evidence", content, round_num, 0.75)

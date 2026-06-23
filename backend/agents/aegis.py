@@ -50,14 +50,31 @@ class AegisAgent(BaseAgent):
                 )
             bandit_evidence = "\n".join(bandit_lines)
 
-        # Cross-examination context
+        # Cross-examination context with prior testimony
         cross_exam_context = ""
         if round_num > 1 and context.get("conflict_clusters"):
             clusters = context["conflict_clusters"]
             relevant = [c for c in clusters if not c.resolved
                         and "AEGIS" in c.agents_involved]
             if relevant:
-                cross_exam_context = "\nCross-examination questions from ARBITER:\n"
+                # Extract AEGIS's own prior testimony to prevent repetition
+                prior_statements = [
+                    p for p in context.get("proceedings", [])
+                    if p.agent == AgentRole.AEGIS
+                ]
+                prior_text = "\n".join(
+                    f"  [Round {p.round_number}]: {p.message[:150]}..."
+                    for p in prior_statements
+                ) if prior_statements else ""
+
+                cross_exam_context = "\nCROSS-EXAMINATION INSTRUCTIONS:\n"
+                if prior_text:
+                    cross_exam_context += (
+                        f"You previously testified:\n{prior_text}\n\n"
+                        "DO NOT repeat these arguments verbatim. "
+                        "Instead, respond ONLY to the new counter-arguments below.\n"
+                    )
+                cross_exam_context += "Opposing counsel's NEW counter-arguments:\n"
                 for cluster in relevant:
                     other_claims = [
                         f.claim for f in cluster.findings
@@ -68,9 +85,8 @@ class AegisAgent(BaseAgent):
                     )
                     for claim in other_claims:
                         cross_exam_context += (
-                            f"  Opposing counsel claims: {claim}\n"
-                            f"  Do you maintain your position? Provide counter-evidence "
-                            f"or revise your confidence score.\n"
+                            f"  Defense claims: {claim}\n"
+                            f"  Respond with NEW counter-evidence or revise your confidence.\n"
                         )
 
         prompt = (

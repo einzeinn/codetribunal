@@ -368,20 +368,39 @@ class TribunalCourt:
 
                     yield entry
 
-                    # Check if any agent withdrew (revised confidence below threshold)
+                    # Check if any agent withdrew or revised confidence
                     if entry.findings:
                         for f in entry.findings:
-                            matching = [
-                                cf for cf in cluster.findings
-                                if cf.finding_id == f.finding_id
-                            ]
-                            if matching and f.confidence < 0.3:
-                                matching[0].withdrawn = True
-                                matching[0].rebuttal = f.rebuttal or f.claim
-                                logger.info(
-                                    f"Agent {agent_name} withdrew finding "
-                                    f"{f.finding_id} (confidence: {f.confidence})"
-                                )
+                            # Match by agent + line range overlap (not finding_id)
+                            # because cross-exam produces new finding IDs
+                            for cf in cluster.findings:
+                                if cf.agent != f.agent:
+                                    continue
+                                if cf.withdrawn:
+                                    continue
+                                if not _ranges_overlap(
+                                    cf.line_start, cf.line_end,
+                                    f.line_start, f.line_end,
+                                    _OVERLAP_TOLERANCE * 2,
+                                ):
+                                    continue
+                                # Found matching original finding
+                                if f.confidence < 0.3:
+                                    cf.withdrawn = True
+                                    cf.rebuttal = f.rebuttal or f.claim
+                                    cf.confidence = f.confidence
+                                    logger.info(
+                                        f"Agent {agent_name} withdrew finding "
+                                        f"{cf.finding_id} (new confidence: {f.confidence})"
+                                    )
+                                elif f.confidence < cf.confidence - 0.15:
+                                    # Significant confidence drop = partial concession
+                                    cf.confidence = f.confidence
+                                    cf.rebuttal = f.rebuttal or f.claim
+                                    logger.info(
+                                        f"Agent {agent_name} revised confidence "
+                                        f"{cf.finding_id}: {cf.confidence} -> {f.confidence}"
+                                    )
 
                     # Check resolution conditions
                     active_findings = [
