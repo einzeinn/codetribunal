@@ -8,7 +8,7 @@ import QuestLog from "../../../components/ui/QuestLog";
 import ScoreBar from "../../../components/ui/ScoreBar";
 import VerdictModal from "../../../components/verdict/VerdictModal";
 
-const WS_BASE = "ws://localhost:8000";
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 const MESSAGE_DELAY = 800;
 const SPEAKING_DURATION = 2000;
 

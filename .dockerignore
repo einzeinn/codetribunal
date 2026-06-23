@@ -1,0 +1,16 @@
+# Docker build context exclusions
+venv/
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+.env
+.env.local
+frontend/node_modules/
+frontend/.next/
+*.md
+.vscode/
+.idea/
+.qoder/
+.agents/
