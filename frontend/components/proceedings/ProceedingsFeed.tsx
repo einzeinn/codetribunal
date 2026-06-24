@@ -38,7 +38,7 @@ interface ProceedingsFeedProps {
   currentPhase?: string;
 }
 
-export default function ProceedingsFeed({ proceedings, isTyping, isConnected, currentPhase }: ProceedingsFeedProps) {
+export default function ProceedingsFeed({ proceedings, isTyping, isConnected }: ProceedingsFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

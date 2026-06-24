@@ -6,7 +6,7 @@ import AgentBench from "../../../components/agents/AgentBench";
 import ProceedingsFeed, { type Proceeding } from "../../../components/proceedings/ProceedingsFeed";
 import QuestLog from "../../../components/ui/QuestLog";
 import ScoreBar from "../../../components/ui/ScoreBar";
-import VerdictModal from "../../../components/verdict/VerdictModal";
+import VerdictModal, { type ConflictCluster } from "../../../components/verdict/VerdictModal";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 const MESSAGE_DELAY = 800;
@@ -19,6 +19,7 @@ const AGENT_ROLES: Record<string, string> = {
   METRIC: "Expert Witness",
   ARBITER: "Judge",
 };
+
 
 const PHASE_ORDER = ["investigation", "conflict_detection", "cross_examination", "verdict", "complete"];
 const PHASE_LABELS: Record<string, string> = {
@@ -71,7 +72,7 @@ function CourtroomContent() {
   const [verdictRecommendations, setVerdictRecommendations] = useState<string[]>([]);
   const [tokenUsage, setTokenUsage] = useState<Record<string, number> | null>(null);
   const [currentPhase, setCurrentPhase] = useState("investigation");
-  const [conflictClusters, setConflictClusters] = useState<any[]>([]);
+  const [conflictClusters, setConflictClusters] = useState<ConflictCluster[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<Proceeding[]>([]);
@@ -343,7 +344,7 @@ function CourtroomContent() {
               <h4 className="font-[family-name:var(--font-cinzel)] text-[8px] text-text-secondary tracking-[0.15em] uppercase mb-2">
                 CONFLICTS ({conflictClusters.length})
               </h4>
-              {conflictClusters.slice(0, 5).map((c: any, i: number) => (
+              {conflictClusters.slice(0, 5).map((c: ConflictCluster, i: number) => (
                 <div key={c.cluster_id || i} className="mb-2 text-[11px]">
                   <span className="font-[family-name:var(--font-jetbrains)] text-gold text-[9px]">
                     L{c.line_start}-{c.line_end}

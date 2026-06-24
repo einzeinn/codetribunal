@@ -26,7 +26,7 @@ const PHASE_LABELS: Record<string, string> = {
 
 export default function MessageEntry({
   agent, tag, message, roundNumber,
-  phase, exhibitRef, isObjection, findings, lineRange,
+  phase, exhibitRef, isObjection, findings,
 }: MessageEntryProps) {
   const isSpeakingRole = agent === "AEGIS" || agent === "AXIOM";
   const showPhaseBanner = phase && PHASE_LABELS[phase];

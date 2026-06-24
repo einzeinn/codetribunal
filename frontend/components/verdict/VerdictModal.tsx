@@ -1,6 +1,6 @@
 "use client";
 
-interface ConflictCluster {
+export interface ConflictCluster {
   cluster_id: string;
   line_start: number;
   line_end: number;
