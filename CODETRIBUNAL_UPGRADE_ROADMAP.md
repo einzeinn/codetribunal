@@ -11,7 +11,7 @@ Dokumen ini adalah rencana eksekusi. Urutan prioritas penting — jangan loncat 
 3. Beri tiap agent tool access nyata (function calling)
 4. Desain & jalankan benchmark vs single-agent baseline
 5. Redesign UI/UX jadi courtroom presentation
-6. Proof of Alibaba Cloud deployment + architecture diagram + demo video
+6. Proof of Alibaba Cloud service usage (Qwen API) + architecture diagram + demo video
 7. Final polish dokumentasi
 
 Kalau waktu terbatas, urutan 1–4 adalah yang menentukan menang/kalah secara substansi. UI bagus tapi arsitektur linear = "looks like multi-agent, isn't".

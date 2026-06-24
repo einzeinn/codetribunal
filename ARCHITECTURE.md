@@ -9,7 +9,7 @@ graph TB
         WS_CLIENT["WebSocket Client"]
     end
 
-    subgraph Backend["Backend (FastAPI / Alibaba Cloud ECS)"]
+    subgraph Backend["Backend (FastAPI / Render)"]
         API["REST + WebSocket API"]
         ORCH["Orchestrator (TribunalCourt)"]
         

@@ -146,7 +146,7 @@ Framework:    FastAPI
 Agent SDK:    Qwen Cloud API (qwen-max / qwen-plus / qwen-turbo)
 Orchestration: Custom debate loop (no heavy framework needed)
 WebSocket:    FastAPI WebSocket (real-time debate streaming)
-Deployment:   Alibaba Cloud ECS (ecs.t6 burstable, Docker + Uvicorn)
+Deployment:   Render (Docker + Uvicorn)
 ```
 
 ### Frontend
@@ -186,7 +186,7 @@ LEDGER:   qwen-turbo — parsing & recording only
      │              │
      │              └── WebSocket ──────────────────────┐
      │                                                  │
-     └── REST API → [FastAPI Backend / Alibaba Cloud]   │
+     └── REST API → [FastAPI Backend / Render]           │
                          │                              │
                          ├── [LEDGER Agent]             │
                          │    └── qwen-turbo            │

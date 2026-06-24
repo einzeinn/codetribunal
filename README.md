@@ -24,7 +24,7 @@ CodeTribunal uses a unique **courtroom metaphor** where code undergoes adversari
 - **Agent SDK**: Qwen Cloud API (qwen-max / qwen-plus / qwen-turbo)
 - **Orchestration**: Custom debate loop
 - **WebSocket**: FastAPI WebSocket (real-time debate streaming)
-- **Deployment**: Alibaba Cloud ECS (ecst6 burstable, Docker + Uvicorn)
+- **Deployment**: Render (Docker + Uvicorn)
 
 ### Frontend
 - **Framework**: Next.js 14 (App Router)
@@ -169,11 +169,12 @@ curl -X POST http://localhost:8000/benchmark/ \
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system architecture, protocol flow, and data flow diagrams.
 
-### Proof of Alibaba Cloud Deployment
+### Proof of Alibaba Cloud Service Usage
 
-- **Backend**: Deployed on Alibaba Cloud ECS (Docker + Uvicorn)
-- **LLM API**: Qwen Cloud via `https://dashscope.aliyuncs.com/compatible-mode/v1` (see `backend/config.py` line `QWEN_BASE_URL`)
+- **Backend Hosting**: Render (Docker + Uvicorn)
+- **LLM API**: Qwen Cloud (Alibaba Cloud) via `https://dashscope.aliyuncs.com/compatible-mode/v1`
 - **Models**: qwen-max, qwen-plus, qwen-turbo from Alibaba's Qwen family
+- **Evidence**: See `backend/config.py` line 15 for `QWEN_BASE_URL` configuration
 
 ## 📄 License
 
