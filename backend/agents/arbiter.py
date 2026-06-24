@@ -77,6 +77,14 @@ class ArbiterAgent(BaseAgent):
             "- If the finding was uncontested, cite why it stands alone\n"
             "- If it was cross-examined, cite what the opposing agent said and why one side won\n"
             "- Do NOT use the same phrasing for different findings — each ruling must reflect its unique evidence\n\n"
+            "REBUTTAL EVALUATION RULES:\n"
+            "- If an opposing agent provided a specific, evidence-backed rebuttal (citing AST analysis, "
+            "tool output, or code patterns) with confidence >= 0.8, and the original agent did NOT "
+            "counter that rebuttal, rule DISMISSED for the original finding\n"
+            "- If the opposing agent withdrew, rule CONFIRMED for the original finding\n"
+            "- If both sides maintained high confidence but with different evidence, rule DISPUTED\n"
+            "- A rebuttal that cites specific code evidence (function names, line numbers, patterns) "
+            "is STRONGER than one that just says 'I disagree'\n\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
             "Keep each item ruling to 2-3 sentences. End with the final ruling."
         )
@@ -138,12 +146,25 @@ class ArbiterAgent(BaseAgent):
                 ]
                 if opponents:
                     opp = opponents[0]
+                    # Flag strong rebuttals (high confidence + specific evidence)
+                    rebuttal_text = (opp.rebuttal or "").lower()
+                    has_specific_evidence = (
+                        bool(opp.evidence_source)
+                        or any(kw in rebuttal_text for kw in [
+                            "function", "line", "ast", "radon", "bandit",
+                            "pattern", "sanitiz", "validat", "parse",
+                        ])
+                    )
+                    is_strong = opp.confidence >= 0.8 and has_specific_evidence
+                    strength_tag = " ***STRONG REBUTTAL***" if is_strong else ""
                     evidence_block += (
                         f"    Opposing argument ({opp.agent}, {opp.finding_id}): "
                         f"[{opp.severity}] {opp.claim[:100]} "
                         f"(confidence: {opp.confidence}"
-                        f"{', WITHDRAWN' if opp.withdrawn else ''})\n"
+                        f"{', WITHDRAWN' if opp.withdrawn else ''}){strength_tag}\n"
                     )
+                    if opp.rebuttal:
+                        evidence_block += f"    Opponent rebuttal: {opp.rebuttal[:150]}\n"
                 state = "RESOLVED" if cluster.resolved else "UNRESOLVED"
                 evidence_block += f"    Cross-exam outcome: {state} after {cluster.debate_rounds} round(s)\n"
             elif cluster and not cluster.has_conflict:
@@ -270,24 +291,26 @@ class ArbiterAgent(BaseAgent):
         )
 
         # ── Maintainability Score ──────────────────────────────────
-        # Based on unresolved contested clusters + total finding count.
-        # Clusters that were debated and CONCLUDEd (by ARBITER or max rounds)
-        # are treated as resolved — they got their due process.
-        # Only clusters still actively disputed with no resolution count against.
+        # Based on cluster resolution rate, NOT finding volume.
+        # Many findings = thorough analysis, not bad code.
+        # Only truly unresolved contested clusters penalize the score.
         contested_unresolved = [
             c for c in clusters
             if c.has_conflict and not c.resolved
         ]
-        resolved_count = sum(
-            1 for c in clusters
-            if c.resolved or not c.has_conflict
-        )
-        maint_penalty = len(contested_unresolved) * 1.5 + max(0, len(active) - 5) * 0.3
-        maintainability = max(0, min(10, round(10 - maint_penalty)))
+        total_clusters = len(clusters) if clusters else 1
+        resolved_clusters = sum(1 for c in clusters if c.resolved)
+        resolution_rate = resolved_clusters / total_clusters if total_clusters > 0 else 1.0
+
+        # Base score from resolution rate (10 * resolution_rate)
+        # Then subtract penalty for each unresolved contested cluster
+        base_score = 10 * resolution_rate
+        unresolved_penalty = len(contested_unresolved) * 1.0
+        maintainability = max(0, min(10, round(base_score - unresolved_penalty)))
         maintainability_detail = (
-            f"{resolved_count} resolved/uncontested, "
-            f"{len(contested_unresolved)} unresolved disputes, "
-            f"penalty {maint_penalty:.1f}"
+            f"{resolved_clusters}/{total_clusters} clusters resolved "
+            f"({resolution_rate:.0%}), "
+            f"{len(contested_unresolved)} unresolved disputes"
         )
 
         return {

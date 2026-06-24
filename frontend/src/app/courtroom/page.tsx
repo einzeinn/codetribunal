@@ -117,15 +117,7 @@ function CourtroomContent() {
         }, SPEAKING_DURATION);
 
         if (msg.tag === "Final Verdict") {
-          const secMatch = msg.message.match(/Security\s*[:\-/]?\s*(\d+(?:\.\d+)?)/i);
-          const perfMatch = msg.message.match(/Performance\s*[:\-/]?\s*(\d+(?:\.\d+)?)/i);
-          const maintMatch = msg.message.match(/Maintainability\s*[:\-/]?\s*(\d+(?:\.\d+)?)/i);
-          const newScores = {
-            security: secMatch ? parseFloat(secMatch[1]) : 5,
-            performance: perfMatch ? parseFloat(perfMatch[1]) : 5,
-            maintainability: maintMatch ? parseFloat(maintMatch[1]) : 5,
-          };
-          setScores(newScores);
+          // Do NOT parse scores from LLM text — use deterministic rubric_scores from backend
           setVerdictText(msg.message);
         }
 
@@ -168,6 +160,13 @@ function CourtroomContent() {
           if (msg.token_usage) setTokenUsage(msg.token_usage);
           if (msg.conflict_clusters) setConflictClusters(msg.conflict_clusters);
           if (msg.rubric_scores?.verdict) setRubricVerdict(msg.rubric_scores.verdict);
+          if (msg.rubric_scores) {
+            setScores({
+              security: msg.rubric_scores.security ?? 5,
+              performance: msg.rubric_scores.performance ?? 5,
+              maintainability: msg.rubric_scores.maintainability ?? 5,
+            });
+          }
         } else if (msg.type === "error") {
           if (redirectedRef.current) return;
           redirectedRef.current = true;
