@@ -167,6 +167,8 @@ curl -X POST http://localhost:8000/benchmark/ \
 
 ## 🏗️ Architecture Diagram
 
+![CodeTribunal Architecture](docs/architecture.png)
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system architecture, protocol flow, and data flow diagrams.
 
 ### Proof of Alibaba Cloud Service Usage
