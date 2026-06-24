@@ -117,8 +117,16 @@ function CourtroomContent() {
         }, SPEAKING_DURATION);
 
         if (msg.tag === "Final Verdict") {
-          // Do NOT parse scores from LLM text — use deterministic rubric_scores from backend
+          // Use deterministic rubric_scores from backend — NOT LLM text parsing
           setVerdictText(msg.message);
+          if (msg.rubric_scores) {
+            setScores({
+              security: msg.rubric_scores.security ?? 5,
+              performance: msg.rubric_scores.performance ?? 5,
+              maintainability: msg.rubric_scores.maintainability ?? 5,
+            });
+            if (msg.rubric_scores.verdict) setRubricVerdict(msg.rubric_scores.verdict);
+          }
         }
 
         setIsTyping(false);

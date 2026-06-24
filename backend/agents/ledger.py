@@ -23,8 +23,13 @@ class LedgerAgent(BaseAgent):
     async def process(self, context: dict) -> ProceedingEntry:
         code = context.get("code_content", "")
         language = context.get("language", "unknown")
-        lines_of_code = len(code.split("\n")) if code else 0
+        # Strip trailing blank lines to get accurate line count
+        stripped_code = code.rstrip("\n\r") if code else ""
+        lines_of_code = len(stripped_code.split("\n")) if stripped_code else 0
         file_size = len(code.encode("utf-8")) if code else 0
+
+        # Store accurate line count in context for all agents
+        context["total_lines"] = lines_of_code
 
         # Real structural parsing via AST (Python) or regex (other languages)
         structural_index = ASTParser.parse(code, language)

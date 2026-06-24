@@ -29,6 +29,12 @@ export interface Proceeding {
   is_objection?: boolean;
   line_range?: [number, number];
   findings?: ProceedingFinding[];
+  rubric_scores?: {
+    security: number;
+    performance: number;
+    maintainability: number;
+    verdict?: string;
+  };
 }
 
 interface ProceedingsFeedProps {

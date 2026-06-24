@@ -62,6 +62,10 @@ class ArbiterAgent(BaseAgent):
             "PER-FINDING EVIDENCE (rule on EACH individually):\n"
             f"{per_finding_evidence}\n"
             "═══════════════════════════════════════════\n\n"
+            "CRITICAL LINE RANGE RULE: For each finding, you MUST copy the line range "
+            "EXACTLY as shown above (e.g. 'lines 15-18'). Do NOT invent, swap, or combine "
+            "line numbers from different findings. If the evidence says 'lines 15-18', "
+            "write 'lines 15-18' — never 'lines 18-15' or any other range.\n\n"
             f"TRIBUNAL ASSESSMENT (deterministic rubric scores — you MUST cite these exactly):\n"
             f"  Security: {rubric['security']}/10 "
             f"({rubric['security_detail']})\n"
@@ -77,14 +81,18 @@ class ArbiterAgent(BaseAgent):
             "- If the finding was uncontested, cite why it stands alone\n"
             "- If it was cross-examined, cite what the opposing agent said and why one side won\n"
             "- Do NOT use the same phrasing for different findings — each ruling must reflect its unique evidence\n\n"
-            "REBUTTAL EVALUATION RULES:\n"
+            "REBUTTAL EVALUATION RULES (FOLLOW STRICTLY):\n"
             "- If an opposing agent provided a specific, evidence-backed rebuttal (citing AST analysis, "
             "tool output, or code patterns) with confidence >= 0.8, and the original agent did NOT "
-            "counter that rebuttal, rule DISMISSED for the original finding\n"
+            "provide a concrete counter-argument, you MUST rule DISMISSED for the original finding\n"
+            "- 'Its mere presence suggests potential future misuse' is NOT a valid counter to "
+            "'AST proves this function is never called' — rule DISMISSED in such cases\n"
             "- If the opposing agent withdrew, rule CONFIRMED for the original finding\n"
             "- If both sides maintained high confidence but with different evidence, rule DISPUTED\n"
-            "- A rebuttal that cites specific code evidence (function names, line numbers, patterns) "
-            "is STRONGER than one that just says 'I disagree'\n\n"
+            "- A rebuttal that cites specific code evidence (function names, line numbers, AST parse results) "
+            "is STRONGER than vague assertions about 'potential future misuse'\n"
+            "- Findings marked ***STRONG REBUTTAL*** should almost always be DISMISSED unless the "
+            "original agent provided an equally strong counter\n\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
             "Keep each item ruling to 2-3 sentences. End with the final ruling."
         )
@@ -129,7 +137,16 @@ class ArbiterAgent(BaseAgent):
             cluster = finding_cluster.get(f.finding_id)
             withdrawn_tag = " [WITHDRAWN in cross-exam]" if f.withdrawn else ""
 
-            evidence_block = f"  {f.finding_id} (lines {f.line_start}-{f.line_end})\n"
+            # Validate line range — fix reversed or invalid ranges
+            ls, le = f.line_start, f.line_end
+            if ls > le:
+                ls, le = le, ls  # swap if reversed
+            if ls == le:
+                line_display = f"line {ls}"
+            else:
+                line_display = f"lines {ls}-{le}"
+
+            evidence_block = f"  {f.finding_id} ({line_display})\n"
             evidence_block += f"    Agent: {f.agent} | Category: {f.category} | Severity: {f.severity}\n"
             evidence_block += f"    Claim: {f.claim[:150]}\n"
             evidence_block += f"    Tool evidence: {f.evidence_source or 'none'}\n"

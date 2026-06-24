@@ -80,6 +80,19 @@ class AegisAgent(BaseAgent):
                         "DO NOT repeat these arguments verbatim. "
                         "Instead, respond ONLY to the new counter-arguments below.\n"
                     )
+                cross_exam_context += (
+                    "CONCESSION RULES (FOLLOW STRICTLY):\n"
+                    "- If the defense provides AST-level or tool-level proof that a "
+                    "function/import is NEVER USED (e.g., 'AST analysis shows subprocess "
+                    "is never called anywhere in the code'), you MUST lower your confidence "
+                    "to 0.2 or below — this is a confirmed false positive.\n"
+                    "- 'Its mere presence suggests potential future misuse' is NOT a valid "
+                    "counter-argument against AST proof of non-usage. Do NOT use this reasoning.\n"
+                    "- If your original finding was based on code presence but the defense "
+                    "proved the code is dead/unused, CONCEDE honestly.\n"
+                    "- Only maintain high confidence if you have NEW evidence that "
+                    "directly counters the defense's specific proof.\n\n"
+                )
                 cross_exam_context += "Opposing counsel's NEW counter-arguments:\n"
                 for cluster in relevant:
                     other_claims = [
@@ -121,17 +134,21 @@ class AegisAgent(BaseAgent):
         # Build structured findings from bandit + LLM synthesis
         findings = []
         finding_counter = 0
+        total_lines = context.get("total_lines", 0) or len(raw_code.split("\n"))
 
         # Bandit findings are authoritative tool evidence
         for bf in bandit_findings:
             finding_counter += 1
+            # Clamp line ranges to actual file length
+            ls = max(1, min(bf.line_start, total_lines))
+            le = max(ls, min(bf.line_end, total_lines))
             findings.append(AgentFinding(
                 finding_id=f"AEGIS-F{finding_counter:03d}",
                 agent="AEGIS",
                 category="security",
                 severity=bf.severity,
-                line_start=bf.line_start,
-                line_end=bf.line_end,
+                line_start=ls,
+                line_end=le,
                 claim=bf.message,
                 evidence_source=f"bandit:{bf.rule_id}",
                 confidence=bf.confidence,
