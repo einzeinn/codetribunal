@@ -23,6 +23,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .agents import TribunalCourt, ProceedingEntry
+from .agents.benchmark import run_benchmark_comparison
 from .config import settings
 from .utils import detect_language_from_content, generate_case_title, sanitize_code_content
 from .database import (
@@ -100,6 +101,9 @@ def _format_entry(entry: ProceedingEntry) -> dict:
     # Include structured findings if present
     if entry.findings:
         data["findings"] = [f.to_dict() for f in entry.findings]
+    # Include deterministic rubric scores if present (from ARBITER verdict)
+    if entry.rubric_scores:
+        data["rubric_scores"] = entry.rubric_scores
     return data
 
 # ═════════════════════════════════════════════════════════════════════
@@ -129,6 +133,24 @@ async def submit_code(submission: CodeSubmission):
         "token_usage": tribunal.token_usage.summary() if settings.TRACK_TOKEN_USAGE else None,
         "summary": tribunal.get_formatted_proceedings(),
     }
+
+
+@app.post("/benchmark/")
+async def benchmark_code(submission: CodeSubmission):
+    """
+    Compare single-agent baseline vs multi-agent tribunal on the same code.
+    Demonstrates measurable efficiency gain of the multi-agent approach.
+    Returns side-by-side metrics for Track 3 hackathon evaluation.
+    """
+    code_content = sanitize_code_content(submission.code_content)
+    language = submission.language
+    if language == "auto" or not language:
+        language = detect_language_from_content(code_content)
+
+    comparison = await run_benchmark_comparison(
+        code_content, language, submission.focus_area
+    )
+    return {"status": "success", **comparison}
 
 
 @app.post("/upload/")
@@ -304,6 +326,13 @@ async def websocket_trial(websocket: WebSocket, session_id: str):
             await asyncio.sleep(0.3)  # slight delay for UX
 
         # Send completion with token usage + trial summary
+        # Extract rubric scores from the verdict entry (deterministic, not LLM-parsed)
+        rubric_scores = None
+        for proc in tribunal.proceedings:
+            if proc.rubric_scores:
+                rubric_scores = proc.rubric_scores
+                break
+
         completion_payload = {
             "type": "completion",
             "message": "Trial completed. Final verdict rendered.",
@@ -311,6 +340,8 @@ async def websocket_trial(websocket: WebSocket, session_id: str):
                 c.to_dict() for c in tribunal.conflict_clusters
             ],
         }
+        if rubric_scores:
+            completion_payload["rubric_scores"] = rubric_scores
         if settings.TRACK_TOKEN_USAGE:
             completion_payload["token_usage"] = tribunal.token_usage.summary()
 

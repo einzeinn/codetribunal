@@ -286,6 +286,7 @@ class ProceedingEntry:
     is_objection: bool = False               # Trigger objection animation
     findings: List[AgentFinding] = field(default_factory=list)  # Structured findings
     line_range: Optional[List[int]] = None   # [start, end] for exhibit highlighting
+    rubric_scores: Optional[Dict[str, Any]] = None  # Deterministic scores from rubric
 
 
 # ── Base Agent ──────────────────────────────────────────────────────
@@ -312,13 +313,15 @@ class BaseAgent:
                phase: str = "", speaker: str = "",
                exhibit_ref: str = "", is_objection: bool = False,
                findings: Optional[List] = None,
-               line_range: Optional[List[int]] = None) -> ProceedingEntry:
+               line_range: Optional[List[int]] = None,
+               rubric_scores: Optional[Dict[str, Any]] = None) -> ProceedingEntry:
         return ProceedingEntry(
             agent=self.role, tag=tag, message=message,
             round_number=round_num, timestamp=datetime.now(),
             confidence=confidence, phase=phase, speaker=speaker,
             exhibit_ref=exhibit_ref, is_objection=is_objection,
             findings=findings or [], line_range=line_range,
+            rubric_scores=rubric_scores,
         )
 
 
@@ -334,3 +337,54 @@ def build_transcript(context: dict) -> str:
             f"[{p.agent.value}] ({p.tag}, Round {p.round_number}): {p.message}"
         )
     return "\n".join(lines)
+
+
+# ── Cluster history builder ────────────────────────────────────────
+def build_cluster_history(
+    clusters: List[ConflictCluster],
+    agent_name: str = "",
+) -> str:
+    """
+    Build a structured per-cluster debate history.
+    If agent_name is given, only return history for clusters involving that agent.
+    This replaces raw transcript dumping with targeted, structured state passing.
+    """
+    if not clusters:
+        return ""
+
+    relevant = clusters
+    if agent_name:
+        relevant = [
+            c for c in clusters
+            if agent_name in [f.agent for f in c.findings]
+        ]
+
+    if not relevant:
+        return ""
+
+    parts = ["DEBATE HISTORY (structured per-cluster):"]
+    for c in relevant:
+        state = "RESOLVED" if c.resolved else (
+            "DISPUTED" if c.has_conflict else "UNCONTESTED"
+        )
+        parts.append(
+            f"\n  Cluster {c.cluster_id} (lines {c.line_start}-{c.line_end}) "
+            f"— {state}, {c.debate_rounds} rounds"
+        )
+
+        # Group findings by agent for clarity
+        by_agent: Dict[str, list] = {}
+        for f in c.findings:
+            by_agent.setdefault(f.agent, []).append(f)
+
+        for ag, findings in by_agent.items():
+            parts.append(f"    {ag}:")
+            for f in findings:
+                status = " [WITHDRAWN]" if f.withdrawn else ""
+                rebuttal = f" — rebuttal: {f.rebuttal[:80]}" if f.rebuttal else ""
+                parts.append(
+                    f"      {f.finding_id}: [{f.severity}] {f.claim[:100]} "
+                    f"(confidence: {f.confidence}{status}){rebuttal}"
+                )
+
+    return "\n".join(parts)

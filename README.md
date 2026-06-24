@@ -34,7 +34,7 @@ CodeTribunal uses a unique **courtroom metaphor** where code undergoes adversari
 - **Deployment**: Vercel
 
 ### Storage
-- **Database**: Supabase (PostgreSQL)
+- **Database**: Neon PostgreSQL (Serverless, session store + case persistence)
 
 ## 🚀 Quick Start
 
@@ -79,32 +79,37 @@ npm run dev
 ```
 [User uploads code]
         ↓
-LEDGER: Parse & index code → create case file
+LEDGER: Parse & index code via AST → create structural case file
         ↓
-AEGIS: Opening statement → identify vulnerabilities
+PARALLEL INVESTIGATION:
+  AEGIS: Bandit security scan + LLM reasoning → security findings
+  AXIOM: Validation pattern detection + LLM reasoning → defense evidence
+  METRIC: Radon complexity analysis + LLM reasoning → performance data
         ↓
-AXIOM: Counter-arguments → defend code decisions
+CONFLICT DETECTION (deterministic, no LLM):
+  Line-range overlap analysis → cluster conflicting findings
         ↓
-METRIC: Present evidence → performance & complexity data
+CROSS-EXAMINATION (conditional — only if conflicts exist):
+  Only conflicting agents debate their specific clusters
+  ARBITER issues procedural rulings: continue / conclude / extend
         ↓
-ARBITER: Facilitate debate rounds (max 3 rounds)
-   ├── Sustain / Overrule objections
-   ├── Request clarification from agents
-   └── Convergence check
+VERDICT:
+  Rubric-based deterministic scoring (security, performance, maintainability)
+  ARBITER per-item ruling with reasoning trails
         ↓
-ARBITER: Deliberate → issue Final Verdict
-        ↓
-LEDGER: Compile structured report
+Final Ruling: APPROVED / APPROVED WITH CONDITIONS / REJECTED
 ```
 
 ## 📊 Debate Protocol Rules
 
-1. **Opening Round** — AEGIS presents all findings, AXIOM responds
-2. **Evidence Round** — METRIC presents data, agents cross-examine
-3. **Closing Round** — Both sides summarize, ARBITER deliberates
-4. **Verdict** — ARBITER issues ruling with confidence scores
-5. **Max rounds:** 3 (prevent infinite loops)
-6. **Consensus mechanism:** Majority confidence score > 0.7 triggers early verdict
+1. **Filing** — LEDGER parses code via AST, creates structural index
+2. **Parallel Investigation** — AEGIS, AXIOM, METRIC run concurrently with their own tools
+3. **Conflict Detection** — Deterministic line-range overlap (no LLM call)
+4. **Cross-Examination** — Only conflicting agents debate their specific clusters
+5. **ARBITER Procedural Ruling** — Dynamic decision: continue / conclude / extend debate
+6. **Verdict** — Rubric-based deterministic scoring + per-item LLM ruling
+7. **Max rounds:** 3 + 1 possible ARBITER extension (prevent infinite loops)
+8. **Early termination:** Agent withdrawal (confidence < 0.3) resolves cluster immediately
 
 ## 🎨 UI Aesthetic
 
@@ -127,20 +132,30 @@ CodeTribunal/
 ## 🏆 Why This Wins Track 3
 
 Track 3 (Agent Society) requirements addressed:
-- ✅ Multiple agents with distinct capabilities
-- ✅ Task division & role assignment
-- ✅ Dialogue, disagreement & negotiation between agents
-- ✅ Measurable efficiency gain vs single-agent baseline
-- ✅ Conflict resolution mechanism
+- Multiple agents with **distinct capabilities** and **agent-specific tools** (Bandit, Radon, AST, ValidationDetector)
+- **Task decomposition**: parallel investigation with role-based specialization
+- **Dialogue and negotiation**: cross-examination debate with confidence revision and withdrawal
+- **Conflict resolution**: deterministic line-range overlap detection + per-cluster targeted debate
+- **Dynamic orchestration**: ARBITER decides whether to continue, conclude, or extend debate rounds
+- **Measurable efficiency gain**: `/benchmark/` endpoint compares single-agent vs multi-agent side by side
+- **Transparent scoring**: deterministic rubric-based scores from structured findings, not LLM guessing
 
-## 📈 Measurable Efficiency Metric
+## 📈 Benchmark: Single-Agent vs Multi-Agent
 
-| Metric | Single Agent | CodeTribunal (5 agents) |
-|--------|-------------|------------------------|
-| Issue categories covered | 1-2 | 3+ (security, perf, maintainability) |
-| False positive rate | Higher (no counter-argument) | Lower (defense agent filters) |
-| Coverage depth | Shallow | Deep (adversarial pressure) |
-| Structured output | Inconsistent | Standardized verdict format |
+Run the comparison:
+```bash
+curl -X POST http://localhost:8000/benchmark/ \
+  -H "Content-Type: application/json" \
+  -d '{"code_content": "your code here", "language": "python"}'
+```
+
+| Metric | Single-Agent Baseline | Multi-Agent Tribunal |
+|--------|----------------------|---------------------|
+| Findings coverage | Shallow, 1 perspective | Deep: security + performance + maintainability |
+| False positive filtering | None | Cross-examination withdraws weak claims |
+| Tool evidence | None | Bandit, Radon, AST, ValidationDetector |
+| Scoring transparency | LLM guesses from text | Deterministic rubric from structured data |
+| Debate rounds | N/A | Dynamic (ARBITER decides continue/conclude/extend) |
 
 ## 🤖 AI / Models
 
@@ -152,35 +167,13 @@ Track 3 (Agent Society) requirements addressed:
 
 ## 🏗️ Architecture Diagram
 
-```
-[User Browser]
-     │
-     ├── HTTP → [Next.js Frontend / Vercel]
-     │              │
-     │              └── WebSocket ──────────────────────┐
-     │                                                 │
-     └── REST API → [FastAPI Backend / Alibaba Cloud]  │
-                         │                             │
-                         ├── [LEDGER Agent]            │
-                         │    └── qwen-turbo           │
-                         │                             │
-                         ├── [AEGIS Agent]             │
-                         │    └── qwen-max             │
-                         │                             │
-                         ├── [AXIOM Agent]             │
-                         │    └── qwen-plus            │
-                         │                             │
-                         ├── [METRIC Agent]            │
-                         │    └── qwen-plus            │
-                         │                             │
-                         ├── [ARBITER Agent]           │
-                         │    └── qwen-max             │
-                         │    └── Orchestrates debate  │
-                         │    └── Streams via WS ──────┘
-                         │
-                         └── [Supabase]
-                              └── Store cases, proceedings, verdicts
-```
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system architecture, protocol flow, and data flow diagrams.
+
+### Proof of Alibaba Cloud Deployment
+
+- **Backend**: Deployed on Alibaba Cloud ECS (Docker + Uvicorn)
+- **LLM API**: Qwen Cloud via `https://dashscope.aliyuncs.com/compatible-mode/v1` (see `backend/config.py` line `QWEN_BASE_URL`)
+- **Models**: qwen-max, qwen-plus, qwen-turbo from Alibaba's Qwen family
 
 ## 📄 License
 

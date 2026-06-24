@@ -338,10 +338,14 @@ class TribunalCourt:
         - An agent withdraws (confidence < 0.3)
         - Max rounds for cluster reached
         - Both sides maintain high confidence → mark as "disputed"
+        - ARBITER decides to conclude or extend (dynamic orchestration)
         """
-        max_global_rounds = settings.MAX_DEBATE_ROUNDS
+        import datetime
 
-        for round_num in range(1, max_global_rounds + 1):
+        max_global_rounds = settings.MAX_DEBATE_ROUNDS
+        extended = False  # Track if ARBITER has already extended once
+
+        for round_num in range(1, max_global_rounds + 2):  # +2 allows one extension
             context["current_round"] = round_num
             any_active = False
 
@@ -427,6 +431,44 @@ class TribunalCourt:
 
             if not any_active:
                 break
+
+            # ── ARBITER Dynamic Orchestration: procedural ruling ──
+            # After each full round, ARBITER decides whether to continue
+            context["conflict_clusters"] = self.conflict_clusters
+            ruling = await self.agents[AgentRole.ARBITER].procedural_ruling(
+                context, round_num
+            )
+
+            # Emit the ruling as a proceeding for transparency
+            ruling_entry = ProceedingEntry(
+                agent=AgentRole.ARBITER,
+                tag="Procedural Ruling",
+                message=(
+                    f"Round {round_num} ruling: {ruling['action'].upper()}. "
+                    f"{ruling['reasoning']}"
+                ),
+                round_number=round_num,
+                timestamp=datetime.datetime.now(),
+                confidence=0.95,
+                phase=TrialPhase.CROSS_EXAMINATION,
+                speaker="ARBITER",
+            )
+            self.proceedings.append(ruling_entry)
+            context["proceedings"] = self.proceedings
+            yield ruling_entry
+
+            # Act on the ruling
+            if ruling["action"] == "conclude":
+                logger.info(
+                    f"ARBITER concluded cross-examination after round {round_num}"
+                )
+                break
+            elif ruling["action"] == "extend" and not extended:
+                extended = True
+                max_global_rounds += 1  # Allow one more round
+                logger.info(
+                    f"ARBITER extended cross-examination by one round"
+                )
 
     # ═════════════════════════════════════════════════════════════════
     # Helpers

@@ -7,7 +7,8 @@ Produces structured AgentFinding objects with real numeric evidence.
 import logging
 from .base import (
     BaseAgent, AgentRole, ProceedingEntry, AgentFinding,
-    TokenUsageLog, truncate_transcript, build_transcript, TrialPhase,
+    TokenUsageLog, truncate_transcript, build_transcript, build_cluster_history,
+    TrialPhase,
 )
 from .code_chunker import chunk_code, build_structural_overview, build_chunked_code
 from .tools import RadonRunner
@@ -59,6 +60,9 @@ class MetricAgent(BaseAgent):
             relevant = [c for c in clusters if not c.resolved
                         and "METRIC" in c.agents_involved]
             if relevant:
+                # Structured cluster history (replaces raw transcript dump)
+                cluster_history = build_cluster_history(clusters, agent_name="METRIC")
+
                 prior_statements = [
                     p for p in context.get("proceedings", [])
                     if p.agent == AgentRole.METRIC
@@ -69,6 +73,8 @@ class MetricAgent(BaseAgent):
                 ) if prior_statements else ""
 
                 cross_exam_context = "\nCROSS-EXAMINATION INSTRUCTIONS:\n"
+                if cluster_history:
+                    cross_exam_context += f"{cluster_history}\n\n"
                 if prior_text:
                     cross_exam_context += (
                         f"You previously testified:\n{prior_text}\n\n"
