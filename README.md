@@ -79,37 +79,63 @@ npm run dev
 ```
 [User uploads code]
         ↓
-LEDGER: Parse & index code via AST → create structural case file
+LEDGER: AST parse → structural case file (line count, imports, functions, classes)
         ↓
-PARALLEL INVESTIGATION:
-  AEGIS: Bandit security scan + LLM reasoning → security findings
-  AXIOM: Validation pattern detection + LLM reasoning → defense evidence
-  METRIC: Radon complexity analysis + LLM reasoning → performance data
+PARALLEL INVESTIGATION (asyncio.gather):
+  AEGIS: Bandit security scan → tool-backed findings with clamped line ranges
+  AXIOM: Validation pattern detection → defense evidence with AST proof
+  METRIC: Radon complexity analysis → performance/complexity data
         ↓
-CONFLICT DETECTION (deterministic, no LLM):
-  Line-range overlap analysis → cluster conflicting findings
+CONFLICT DETECTION (deterministic, zero LLM calls):
+  Line-range overlap analysis (±3 line tolerance) → cluster conflicting findings
         ↓
 CROSS-EXAMINATION (conditional — only if conflicts exist):
   Only conflicting agents debate their specific clusters
   ARBITER issues procedural rulings: continue / conclude / extend
+  Agent withdrawal at confidence < 0.3 resolves cluster immediately
+  AEGIS tracks defeated findings across rounds (prevents re-arguing lost points)
         ↓
-VERDICT:
-  Rubric-based deterministic scoring (security, performance, maintainability)
-  ARBITER per-item ruling with reasoning trails
+VERDICT (5-step pipeline):
+  1. ARBITER LLM writes per-finding verdicts (CONFIRMED / DISMISSED / DISPUTED)
+  2. Parse statuses from LLM response → mark AgentFinding objects
+  3. Compute rubric scores respecting verdict status
+     — CONFIRMED: 100% penalty, DISMISSED: 0% penalty, DISPUTED: 50% penalty
+  4. Deterministic verdict from corrected scores
+  5. Append score block to verdict text
         ↓
 Final Ruling: APPROVED / APPROVED WITH CONDITIONS / REJECTED
 ```
 
 ## 📊 Debate Protocol Rules
 
-1. **Filing** — LEDGER parses code via AST, creates structural index
-2. **Parallel Investigation** — AEGIS, AXIOM, METRIC run concurrently with their own tools
-3. **Conflict Detection** — Deterministic line-range overlap (no LLM call)
+1. **Filing** — LEDGER parses code via AST, strips trailing blanks, stores `total_lines` in context
+2. **Parallel Investigation** — AEGIS, AXIOM, METRIC run concurrently with agent-specific tools
+3. **Conflict Detection** — Deterministic line-range overlap (no LLM call, ±3 line tolerance)
 4. **Cross-Examination** — Only conflicting agents debate their specific clusters
 5. **ARBITER Procedural Ruling** — Dynamic decision: continue / conclude / extend debate
-6. **Verdict** — Rubric-based deterministic scoring + per-item LLM ruling
+6. **Verdict Pipeline** — LLM writes verdicts → parse statuses → mark findings → compute scores → compute verdict
 7. **Max rounds:** 3 + 1 possible ARBITER extension (prevent infinite loops)
 8. **Early termination:** Agent withdrawal (confidence < 0.3) resolves cluster immediately
+
+## 🔑 Key Architectural Decisions
+
+### Verdict-First Scoring Pipeline
+Scores are computed **after** the LLM writes per-finding verdicts, not before. This ensures dismissals directly affect the rubric:
+- **CONFIRMED**: Full severity penalty (100%)
+- **DISMISSED**: No penalty — excluded from scoring entirely (0%)
+- **DISPUTED**: Half penalty — technically valid but mitigated context (50%)
+- **Proportional floor**: If findings are dismissed, security score gets a minimum floor proportional to the dismissal ratio
+
+### Agent Memory System
+AEGIS receives a **DEFEATED FINDINGS** block each cross-exam round, listing findings it already lost. This prevents re-arguing defeated points and enables genuine learning within a session.
+
+### Concession Rules
+When AXIOM provides AST-level proof of non-usage (e.g., "subprocess is never called"), AEGIS MUST concede to confidence ≤ 0.2. The "mere presence suggests future misuse" argument is explicitly rejected against AST evidence.
+
+### Line Range Integrity
+- Bandit's `end_col_offset` (column offset) is NOT used as line end — actual line numbers are derived from `line_number` + code snippet analysis
+- All line ranges are clamped to `total_lines` (stripped of trailing blanks)
+- Reversed ranges (e.g., "lines 66-56") are auto-swapped
 
 ## 🎨 UI Aesthetic
 
@@ -137,6 +163,9 @@ Track 3 (Agent Society) requirements addressed:
 - **Dialogue and negotiation**: cross-examination debate with confidence revision and withdrawal
 - **Conflict resolution**: deterministic line-range overlap detection + per-cluster targeted debate
 - **Dynamic orchestration**: ARBITER decides whether to continue, conclude, or extend debate rounds
+- **Agent memory**: defeated findings tracked across rounds — agents learn from losses within a session
+- **Adversarial integrity**: concession rules force honest acknowledgment when AST proof invalidates a finding
+- **Verdict-status scoring**: CONFIRMED/DISMISSED/DISPUTED statuses directly affect rubric penalties, not just text
 - **Measurable efficiency gain**: `/benchmark/` endpoint compares single-agent vs multi-agent side by side
 - **Transparent scoring**: deterministic rubric-based scores from structured findings, not LLM guessing
 
@@ -152,9 +181,10 @@ curl -X POST http://localhost:8000/benchmark/ \
 | Metric | Single-Agent Baseline | Multi-Agent Tribunal |
 |--------|----------------------|---------------------|
 | Findings coverage | Shallow, 1 perspective | Deep: security + performance + maintainability |
-| False positive filtering | None | Cross-examination withdraws weak claims |
+| False positive filtering | None | Cross-examination with AST-backed concessions |
 | Tool evidence | None | Bandit, Radon, AST, ValidationDetector |
-| Scoring transparency | LLM guesses from text | Deterministic rubric from structured data |
+| Scoring transparency | LLM guesses from text | Verdict-first pipeline: status → penalty → score |
+| Agent memory | None | Defeated findings tracked across rounds |
 | Debate rounds | N/A | Dynamic (ARBITER decides continue/conclude/extend) |
 
 ## 🤖 AI / Models

@@ -2,8 +2,16 @@
 CodeTribunal - ARBITER Agent (The Judge)
 Issues per-item verdicts with reasoning trails based on structured findings
 and conflict cluster outcomes. Orchestrates the final ruling.
+
+Verdict flow (post-fix):
+  1. LLM writes per-finding verdicts (CONFIRMED/DISMISSED/DISPUTED)
+  2. Parse statuses from LLM response -> mark findings
+  3. Compute scores from marked findings (dismissed = no penalty)
+  4. Compute verdict from scores
+  5. Append score block to verdict text
 """
 
+import re
 import logging
 from typing import List
 from .base import (
@@ -28,33 +36,24 @@ class ArbiterAgent(BaseAgent):
         all_findings: List[AgentFinding] = context.get("all_findings", [])
         conflict_clusters: List[ConflictCluster] = context.get("conflict_clusters", [])
 
-        # Build structured evidence summary for LLM verdict
-        evidence_summary = self._build_evidence_summary(all_findings, conflict_clusters)
-
-        # Issue per-item verdict
+        # Issue per-item verdict (scores computed AFTER LLM rules on each finding)
         return await self._issue_verdict(
-            round_num, transcript, evidence_summary,
+            round_num, transcript,
             all_findings, conflict_clusters, context
         )
 
     async def _issue_verdict(
         self, round_num: int, transcript: str,
-        evidence_summary: str,
         all_findings: List[AgentFinding],
         conflict_clusters: List[ConflictCluster],
         context: dict,
     ) -> ProceedingEntry:
-        # Compute deterministic rubric scores from structured findings
-        rubric = self._compute_rubric_scores(all_findings, conflict_clusters)
-
-        # Compute deterministic verdict from scores (no LLM guessing)
-        verdict = self._compute_verdict(rubric)
-
         # Build per-finding evidence block for the LLM
         per_finding_evidence = self._build_per_finding_evidence(
             all_findings, conflict_clusters
         )
 
+        # ── Step 1: Ask LLM to write per-finding verdicts FIRST ──
         prompt = (
             "All evidence has been presented. Issue your FINAL VERDICT.\n\n"
             f"Full transcript:\n{transcript}\n\n"
@@ -66,14 +65,6 @@ class ArbiterAgent(BaseAgent):
             "EXACTLY as shown above (e.g. 'lines 15-18'). Do NOT invent, swap, or combine "
             "line numbers from different findings. If the evidence says 'lines 15-18', "
             "write 'lines 15-18' — never 'lines 18-15' or any other range.\n\n"
-            f"TRIBUNAL ASSESSMENT (deterministic rubric scores — you MUST cite these exactly):\n"
-            f"  Security: {rubric['security']}/10 "
-            f"({rubric['security_detail']})\n"
-            f"  Performance: {rubric['performance']}/10 "
-            f"({rubric['performance_detail']})\n"
-            f"  Maintainability: {rubric['maintainability']}/10 "
-            f"({rubric['maintainability_detail']})\n\n"
-            f"FINAL RULING (already determined — you MUST use this exact verdict): {verdict}\n\n"
             "INSTRUCTIONS FOR EACH FINDING:\n"
             "- State the finding ID and line range\n"
             "- Status: CONFIRMED, DISMISSED, or DISPUTED\n"
@@ -81,6 +72,13 @@ class ArbiterAgent(BaseAgent):
             "- If the finding was uncontested, cite why it stands alone\n"
             "- If it was cross-examined, cite what the opposing agent said and why one side won\n"
             "- Do NOT use the same phrasing for different findings — each ruling must reflect its unique evidence\n\n"
+            "WHEN TO USE DISPUTED (IMPORTANT):\n"
+            "- Use DISPUTED when the finding is TECHNICALLY VALID but the defense raised legitimate mitigating factors\n"
+            "- Example: 'pickle.load() on local trusted files' — technically a risk, but defense showed files come from controlled source\n"
+            "- Example: 'subprocess import present' but AST shows it's never called — if prosecution has some counter-evidence, rule DISPUTED\n"
+            "- Example: 'SQL query pattern' but defense showed parameterized queries elsewhere — rule DISPUTED\n"
+            "- DISPUTED means: the code pattern IS risky in general, but in THIS specific context the risk is reduced\n"
+            "- Do NOT binary-force everything to CONFIRMED or DISMISSED — use DISPUTED for legitimate middle ground\n\n"
             "REBUTTAL EVALUATION RULES (FOLLOW STRICTLY):\n"
             "- If an opposing agent provided a specific, evidence-backed rebuttal (citing AST analysis, "
             "tool output, or code patterns) with confidence >= 0.8, and the original agent did NOT "
@@ -94,7 +92,9 @@ class ArbiterAgent(BaseAgent):
             "- Findings marked ***STRONG REBUTTAL*** should almost always be DISMISSED unless the "
             "original agent provided an equally strong counter\n\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
-            "Keep each item ruling to 2-3 sentences. End with the final ruling."
+            "Keep each item ruling to 2-3 sentences.\n\n"
+            "IMPORTANT: After all per-finding rulings, end with your final verdict: "
+            "APPROVED, APPROVED WITH CONDITIONS, or REJECTED."
         )
 
         content, usage = await self._call_llm(
@@ -102,9 +102,43 @@ class ArbiterAgent(BaseAgent):
         )
         context.setdefault("token_usage", TokenUsageLog()).record(usage)
 
+        # ── Step 2: Parse per-finding statuses from LLM response ──
+        verdict_statuses = self._parse_verdict_statuses(content, all_findings)
+        logger.info(f"Parsed verdict statuses: {verdict_statuses}")
+
+        # ── Step 3: Mark findings with verdict status ──
+        for finding_id, status in verdict_statuses.items():
+            for f in all_findings:
+                if f.finding_id == finding_id:
+                    f.verdict_status = status  # type: ignore[attr-defined]
+                    if status == "DISMISSED":
+                        f.withdrawn = True  # Dismissed = no scoring penalty
+                    logger.info(
+                        f"ARBITER verdict: {finding_id} -> {status}"
+                    )
+                    break
+
+        # ── Step 4: Compute scores AFTER verdict (dismissed = no penalty) ──
+        rubric = self._compute_rubric_scores(all_findings, conflict_clusters)
+
+        # ── Step 5: Compute verdict from corrected scores ──
+        verdict = self._compute_verdict(rubric)
+
+        # ── Step 6: Append score block to verdict text ──
+        score_block = (
+            f"\n\nTRIBUNAL ASSESSMENT: "
+            f"Security {rubric['security']}/10 ({rubric['security_detail']}). "
+            f"Performance {rubric['performance']}/10 ({rubric['performance_detail']}). "
+            f"Maintainability {rubric['maintainability']}/10 ({rubric['maintainability_detail']}). "
+            f"Final ruling: {verdict}."
+        )
+        content = content.rstrip() + score_block
+
         # Build verdict proceeding with structured metadata
         primary_line = all_findings[0].line_start if all_findings else 1
-        last_line = all_findings[-1].line_end if all_findings else 1
+        last_line = max(
+            (f.line_end for f in all_findings), default=1
+        )
 
         return self._entry(
             "Final Verdict", content, round_num, 0.9,
@@ -115,6 +149,66 @@ class ArbiterAgent(BaseAgent):
             line_range=[primary_line, last_line],
             rubric_scores=rubric,
         )
+
+    def _parse_verdict_statuses(
+        self, verdict_text: str, all_findings: List[AgentFinding]
+    ) -> dict:
+        """
+        Parse CONFIRMED/DISMISSED/DISPUTED statuses from LLM verdict text.
+        Returns dict mapping finding_id -> status.
+        Uses multiple regex patterns to handle varied LLM output formats.
+        """
+        statuses = {}
+        finding_ids = {f.finding_id for f in all_findings}
+
+        # Pattern 1: Direct format — "AEGIS-F001: CONFIRMED" or "AEGIS-F001 (lines 15-18): DISMISSED"
+        # Pattern 2: With dash — "AEGIS-F001 - CONFIRMED"
+        # Pattern 3: With em dash — "AEGIS-F001 — CONFIRMED"
+        # Pattern 4: Sentence format — "AEGIS-F001 is CONFIRMED" or "AEGIS-F001 is ruled DISMISSED"
+        # Pattern 5: Prefix format — "For AEGIS-F001: DISPUTED" or "Regarding AEGIS-F001: CONFIRMED"
+        patterns = [
+            # Direct: "AEGIS-F001: CONFIRMED" or "AEGIS-F001 (lines 15-18): DISMISSED"
+            r"(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)(?:\s*\([^)]*\))?\s*[-:—–]\s*(CONFIRMED|DISMISSED|DISPUTED)",
+            # Sentence: "AEGIS-F001 is CONFIRMED" or "AEGIS-F001 is ruled DISMISSED"
+            r"(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)\s+(?:is\s+(?:ruled\s+)?|was\s+(?:ruled\s+)?)(CONFIRMED|DISMISSED|DISPUTED)",
+            # Prefix: "For AEGIS-F001: DISPUTED" or "Regarding AEGIS-F001, CONFIRMED"
+            r"(?:for|regarding|as\s+for)\s+(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)[,:\s]+(?:ruled\s+)?(CONFIRMED|DISMISSED|DISPUTED)",
+        ]
+
+        for pattern in patterns:
+            matches = re.finditer(pattern, verdict_text, re.IGNORECASE)
+            for match in matches:
+                finding_id = match.group(1).upper()
+                status = match.group(2).upper()
+                if finding_id in finding_ids and finding_id not in statuses:
+                    statuses[finding_id] = status
+
+        # If no structured statuses found, fall back to heuristic:
+        # withdrawn findings -> DISMISSED, others -> CONFIRMED
+        if not statuses:
+            for f in all_findings:
+                if f.withdrawn:
+                    statuses[f.finding_id] = "DISMISSED"
+                else:
+                    statuses[f.finding_id] = "CONFIRMED"
+            logger.warning(
+                "Could not parse verdict statuses from LLM response, "
+                "using heuristic fallback"
+            )
+        else:
+            # Fill in any missing findings not mentioned by LLM
+            for f in all_findings:
+                if f.finding_id not in statuses:
+                    if f.withdrawn:
+                        statuses[f.finding_id] = "DISMISSED"
+                    else:
+                        statuses[f.finding_id] = "CONFIRMED"
+                    logger.info(
+                        f"Finding {f.finding_id} not mentioned in verdict, "
+                        f"defaulting to {statuses[f.finding_id]}"
+                    )
+
+        return statuses
 
     def _build_per_finding_evidence(
         self,
@@ -271,40 +365,81 @@ class ArbiterAgent(BaseAgent):
         Deterministic rubric scoring from structured findings.
         Scores are computed from tool evidence, not LLM guessing.
 
+        Verdict status flow:
+        - CONFIRMED: full penalty
+        - DISMISSED: no penalty (excluded from scoring)
+        - DISPUTED: 50% penalty (evidence inconclusive)
+
         Returns dict with security, performance, maintainability (0-10 each)
         plus human-readable detail strings.
         """
-        # Only consider non-withdrawn findings for scoring
-        active = [f for f in findings if not f.withdrawn]
+        # Filter findings by verdict status
+        # DISMISSED findings have been marked withdrawn=True in _issue_verdict
+        confirmed = [f for f in findings if not f.withdrawn and getattr(f, 'verdict_status', 'CONFIRMED') == 'CONFIRMED']
+        disputed = [f for f in findings if getattr(f, 'verdict_status', None) == 'DISPUTED']
+        dismissed = [f for f in findings if getattr(f, 'verdict_status', None) == 'DISMISSED']
+
+        # Count total non-info findings for dismissal ratio
+        total_actionable = [f for f in findings if f.severity != "info"]
+        dismissal_ratio = len(dismissed) / max(len(total_actionable), 1)
+
+        logger.info(
+            f"Scoring breakdown: {len(confirmed)} confirmed, {len(disputed)} disputed, "
+            f"{len(dismissed)} dismissed (ratio: {dismissal_ratio:.0%})"
+        )
 
         # ── Security Score ─────────────────────────────────────────
         # Penalise confirmed security findings by severity weight
-        sec_findings = [
-            f for f in active
+        sec_confirmed = [
+            f for f in confirmed
+            if f.category == "security" and f.agent in ("AEGIS", "METRIC")
+        ]
+        sec_disputed = [
+            f for f in disputed
             if f.category == "security" and f.agent in ("AEGIS", "METRIC")
         ]
         severity_weights = {"critical": 3, "high": 2, "medium": 1, "low": 0.5}
-        sec_penalty = sum(severity_weights.get(f.severity, 0.5) for f in sec_findings)
+        sec_penalty = sum(severity_weights.get(f.severity, 0.5) for f in sec_confirmed)
+        sec_penalty += 0.5 * sum(severity_weights.get(f.severity, 0.5) for f in sec_disputed)  # 50% for disputed
         security = max(0, min(10, round(10 - sec_penalty)))
+
+        # Proportional floor: if findings were dismissed, security should reflect
+        # that the prosecution partially lost. E.g., dismissing 1/6 findings = floor of 1-2.
+        if dismissal_ratio > 0 and sec_penalty > 0:
+            dismissal_floor = round(10 * dismissal_ratio * 0.5)  # 50% credit for dismissals
+            security = max(security, dismissal_floor)
+            if dismissal_floor > 0:
+                logger.info(
+                    f"Security dismissal floor applied: {dismissal_floor} "
+                    f"(dismissed {len(dismissed)}/{len(total_actionable)} findings)"
+                )
+
         security_detail = (
-            f"{len(sec_findings)} confirmed security findings, "
+            f"{len(sec_confirmed)} confirmed + {len(sec_disputed)} disputed security findings, "
             f"penalty {sec_penalty:.1f}"
         )
 
         # ── Performance Score ──────────────────────────────────────
         # Penalise high/medium complexity findings from METRIC (radon)
-        perf_findings = [
-            f for f in active
+        perf_confirmed = [
+            f for f in confirmed
             if f.category == "complexity"
             or (f.agent == "METRIC" and f.category != "security")
         ]
-        high_cc = sum(1 for f in perf_findings if f.severity == "critical")
-        med_cc = sum(1 for f in perf_findings if f.severity in ("high", "medium"))
+        perf_disputed = [
+            f for f in disputed
+            if f.category == "complexity"
+            or (f.agent == "METRIC" and f.category != "security")
+        ]
+        high_cc = sum(1 for f in perf_confirmed if f.severity == "critical")
+        med_cc = sum(1 for f in perf_confirmed if f.severity in ("high", "medium"))
+        high_cc += 0.5 * sum(1 for f in perf_disputed if f.severity == "critical")
+        med_cc += 0.5 * sum(1 for f in perf_disputed if f.severity in ("high", "medium"))
         perf_penalty = high_cc * 1.5 + med_cc * 0.5
         performance = max(0, min(10, round(10 - perf_penalty)))
         performance_detail = (
-            f"{high_cc} high-complexity functions, "
-            f"{med_cc} medium-complexity, penalty {perf_penalty:.1f}"
+            f"{high_cc:.1f} high-complexity functions, "
+            f"{med_cc:.1f} medium-complexity, penalty {perf_penalty:.1f}"
         )
 
         # ── Maintainability Score ──────────────────────────────────

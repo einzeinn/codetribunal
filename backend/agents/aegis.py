@@ -55,58 +55,96 @@ class AegisAgent(BaseAgent):
         cross_exam_context = ""
         if round_num > 1 and context.get("conflict_clusters"):
             clusters = context["conflict_clusters"]
-            relevant = [c for c in clusters if not c.resolved
-                        and "AEGIS" in c.agents_involved]
-            if relevant:
-                # Structured cluster history (replaces raw transcript dump)
-                cluster_history = build_cluster_history(clusters, agent_name="AEGIS")
 
-                # Extract AEGIS's own prior testimony to prevent repetition
-                prior_statements = [
-                    p for p in context.get("proceedings", [])
-                    if p.agent == AgentRole.AEGIS
-                ]
-                prior_text = "\n".join(
-                    f"  [Round {p.round_number}]: {p.message[:150]}..."
-                    for p in prior_statements
-                ) if prior_statements else ""
+            # Show UNRESOLVED clusters (active debates)
+            unresolved = [c for c in clusters if not c.resolved
+                         and "AEGIS" in c.agents_involved]
 
+            # ALSO show RESOLVED clusters where AEGIS conceded or lost
+            # This prevents AEGIS from re-arguing defeated points
+            resolved_aegis = [c for c in clusters if c.resolved
+                             and "AEGIS" in [f.agent for f in c.findings]]
+
+            # Build list of AEGIS findings that were withdrawn/conceded
+            conceded_findings = []
+            for c in resolved_aegis:
+                for f in c.findings:
+                    if f.agent == "AEGIS" and f.withdrawn:
+                        conceded_findings.append(f)
+
+            if unresolved or conceded_findings:
                 cross_exam_context = "\nCROSS-EXAMINATION INSTRUCTIONS:\n"
-                if cluster_history:
-                    cross_exam_context += f"{cluster_history}\n\n"
-                if prior_text:
+
+                # ── DEFEATED FINDINGS (critical for memory) ──
+                if conceded_findings:
                     cross_exam_context += (
-                        f"You previously testified:\n{prior_text}\n\n"
-                        "DO NOT repeat these arguments verbatim. "
-                        "Instead, respond ONLY to the new counter-arguments below.\n"
+                        "═══ DEFEATED FINDINGS (DO NOT RE-ARGUE) ═══\n"
+                        "The following findings were REJECTED during cross-examination.\n"
+                        "Do NOT repeat these arguments. Do NOT re-raise them.\n"
+                        "The court has already ruled against them:\n"
                     )
-                cross_exam_context += (
-                    "CONCESSION RULES (FOLLOW STRICTLY):\n"
-                    "- If the defense provides AST-level or tool-level proof that a "
-                    "function/import is NEVER USED (e.g., 'AST analysis shows subprocess "
-                    "is never called anywhere in the code'), you MUST lower your confidence "
-                    "to 0.2 or below — this is a confirmed false positive.\n"
-                    "- 'Its mere presence suggests potential future misuse' is NOT a valid "
-                    "counter-argument against AST proof of non-usage. Do NOT use this reasoning.\n"
-                    "- If your original finding was based on code presence but the defense "
-                    "proved the code is dead/unused, CONCEDE honestly.\n"
-                    "- Only maintain high confidence if you have NEW evidence that "
-                    "directly counters the defense's specific proof.\n\n"
-                )
-                cross_exam_context += "Opposing counsel's NEW counter-arguments:\n"
-                for cluster in relevant:
-                    other_claims = [
-                        f.claim for f in cluster.findings
-                        if f.agent != "AEGIS" and not f.withdrawn
-                    ]
-                    cross_exam_context += (
-                        f"\nRegarding lines {cluster.line_start}-{cluster.line_end}:\n"
-                    )
-                    for claim in other_claims:
+                    for f in conceded_findings:
                         cross_exam_context += (
-                            f"  Defense claims: {claim}\n"
-                            f"  Respond with NEW counter-evidence or revise your confidence.\n"
+                            f"  ✗ {f.finding_id} (lines {f.line_start}-{f.line_end}): "
+                            f"{f.claim[:100]}\n"
+                            f"    Reason for rejection: {f.rebuttal[:120] if f.rebuttal else 'defense proved non-usage via AST analysis'}\n"
+                            f"    Your confidence was: {f.confidence}\n"
                         )
+                    cross_exam_context += (
+                        "═══════════════════════════════════════════\n"
+                        "IMPORTANT: These findings are DEAD. Do not mention them again.\n"
+                        "Focus ONLY on findings that have NOT been defeated.\n\n"
+                    )
+
+                # ── Active debates ──
+                if unresolved:
+                    cluster_history = build_cluster_history(clusters, agent_name="AEGIS")
+
+                    # Extract AEGIS's own prior testimony to prevent repetition
+                    prior_statements = [
+                        p for p in context.get("proceedings", [])
+                        if p.agent == AgentRole.AEGIS
+                    ]
+                    prior_text = "\n".join(
+                        f"  [Round {p.round_number}]: {p.message[:150]}..."
+                        for p in prior_statements
+                    ) if prior_statements else ""
+
+                    if cluster_history:
+                        cross_exam_context += f"{cluster_history}\n\n"
+                    if prior_text:
+                        cross_exam_context += (
+                            f"You previously testified:\n{prior_text}\n\n"
+                            "DO NOT repeat these arguments verbatim. "
+                            "Instead, respond ONLY to the new counter-arguments below.\n"
+                        )
+                    cross_exam_context += (
+                        "CONCESSION RULES (FOLLOW STRICTLY):\n"
+                        "- If the defense provides AST-level or tool-level proof that a "
+                        "function/import is NEVER USED (e.g., 'AST analysis shows subprocess "
+                        "is never called anywhere in the code'), you MUST lower your confidence "
+                        "to 0.2 or below — this is a confirmed false positive.\n"
+                        "- 'Its mere presence suggests potential future misuse' is NOT a valid "
+                        "counter-argument against AST proof of non-usage. Do NOT use this reasoning.\n"
+                        "- If your original finding was based on code presence but the defense "
+                        "proved the code is dead/unused, CONCEDE honestly.\n"
+                        "- Only maintain high confidence if you have NEW evidence that "
+                        "directly counters the defense's specific proof.\n\n"
+                    )
+                    cross_exam_context += "Opposing counsel's NEW counter-arguments:\n"
+                    for cluster in unresolved:
+                        other_claims = [
+                            f.claim for f in cluster.findings
+                            if f.agent != "AEGIS" and not f.withdrawn
+                        ]
+                        cross_exam_context += (
+                            f"\nRegarding lines {cluster.line_start}-{cluster.line_end}:\n"
+                        )
+                        for claim in other_claims:
+                            cross_exam_context += (
+                                f"  Defense claims: {claim}\n"
+                                f"  Respond with NEW counter-evidence or revise your confidence.\n"
+                            )
 
         prompt = (
             f"Review the following {language} code for security vulnerabilities.\n\n"

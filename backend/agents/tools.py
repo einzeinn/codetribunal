@@ -116,6 +116,17 @@ class BanditRunner:
                         severity_map = {
                             "HIGH": "high", "MEDIUM": "medium", "LOW": "low"
                         }
+                        # Bandit's end_col_offset is a COLUMN offset, not a line number.
+                        # Use line_number for both start and end (single-line finding).
+                        # For multi-line issues, estimate end from code context.
+                        start_line = issue.get("line_number", 0)
+                        # Estimate end line: most bandit findings are single-line.
+                        # For multi-line (e.g., SQL strings), add a small buffer.
+                        end_line = start_line
+                        code_snippet = issue.get("code", "")
+                        if code_snippet and "\n" in code_snippet:
+                            end_line = start_line + code_snippet.count("\n")
+
                         findings.append(ToolFinding(
                             tool_name="bandit",
                             rule_id=issue.get("test_id", "unknown"),
@@ -123,8 +134,8 @@ class BanditRunner:
                             severity=severity_map.get(
                                 issue.get("issue_severity", "MEDIUM"), "medium"
                             ),
-                            line_start=issue.get("line_number", 0),
-                            line_end=issue.get("end_col_offset", issue.get("line_number", 0)),
+                            line_start=start_line,
+                            line_end=end_line,
                             message=issue.get("issue_text", ""),
                             evidence=f"Rule: {issue.get('test_id', '?')} "
                                      f"({issue.get('test_name', '?')}) — "
