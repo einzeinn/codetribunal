@@ -47,25 +47,38 @@ class ArbiterAgent(BaseAgent):
         # Compute deterministic rubric scores from structured findings
         rubric = self._compute_rubric_scores(all_findings, conflict_clusters)
 
+        # Compute deterministic verdict from scores (no LLM guessing)
+        verdict = self._compute_verdict(rubric)
+
+        # Build per-finding evidence block for the LLM
+        per_finding_evidence = self._build_per_finding_evidence(
+            all_findings, conflict_clusters
+        )
+
         prompt = (
             "All evidence has been presented. Issue your FINAL VERDICT.\n\n"
-            f"Evidence summary:\n{evidence_summary}\n\n"
             f"Full transcript:\n{transcript}\n\n"
-            "For EACH finding in the evidence summary, rule individually:\n"
-            "- State the finding ID and line range\n"
-            "- Status: CONFIRMED, DISMISSED, or DISPUTED\n"
-            "- Which specific tool evidence or argument won and why\n\n"
-            f"TRIBUNAL ASSESSMENT (deterministic rubric scores — cite these in your ruling):\n"
+            "═══════════════════════════════════════════\n"
+            "PER-FINDING EVIDENCE (rule on EACH individually):\n"
+            f"{per_finding_evidence}\n"
+            "═══════════════════════════════════════════\n\n"
+            f"TRIBUNAL ASSESSMENT (deterministic rubric scores — you MUST cite these exactly):\n"
             f"  Security: {rubric['security']}/10 "
             f"({rubric['security_detail']})\n"
             f"  Performance: {rubric['performance']}/10 "
             f"({rubric['performance_detail']})\n"
             f"  Maintainability: {rubric['maintainability']}/10 "
             f"({rubric['maintainability_detail']})\n\n"
-            "End with: APPROVED, APPROVED WITH CONDITIONS, or REJECTED.\n"
+            f"FINAL RULING (already determined — you MUST use this exact verdict): {verdict}\n\n"
+            "INSTRUCTIONS FOR EACH FINDING:\n"
+            "- State the finding ID and line range\n"
+            "- Status: CONFIRMED, DISMISSED, or DISPUTED\n"
+            "- Reference the SPECIFIC tool evidence or cross-exam argument that determined your ruling\n"
+            "- If the finding was uncontested, cite why it stands alone\n"
+            "- If it was cross-examined, cite what the opposing agent said and why one side won\n"
+            "- Do NOT use the same phrasing for different findings — each ruling must reflect its unique evidence\n\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
-            "Keep each item ruling to 2 sentences maximum. "
-            "Reference specific finding IDs (e.g., AEGIS-F001) and tool evidence (e.g., bandit B608)."
+            "Keep each item ruling to 2-3 sentences. End with the final ruling."
         )
 
         content, usage = await self._call_llm(
@@ -86,6 +99,77 @@ class ArbiterAgent(BaseAgent):
             line_range=[primary_line, last_line],
             rubric_scores=rubric,
         )
+
+    def _build_per_finding_evidence(
+        self,
+        findings: List[AgentFinding],
+        clusters: List[ConflictCluster],
+    ) -> str:
+        """
+        Build a per-finding evidence block with cross-exam outcomes.
+        Gives the LLM specific context for each finding so it can produce
+        differentiated reasoning instead of template text.
+        """
+        # Map findings to their cluster (if any)
+        finding_cluster: dict = {}
+        for c in clusters:
+            for f in c.findings:
+                finding_cluster[f.finding_id] = c
+
+        parts = []
+        for f in findings[:15]:  # Cap to avoid token explosion
+            cluster = finding_cluster.get(f.finding_id)
+            withdrawn_tag = " [WITHDRAWN in cross-exam]" if f.withdrawn else ""
+
+            evidence_block = f"  {f.finding_id} (lines {f.line_start}-{f.line_end})\n"
+            evidence_block += f"    Agent: {f.agent} | Category: {f.category} | Severity: {f.severity}\n"
+            evidence_block += f"    Claim: {f.claim[:150]}\n"
+            evidence_block += f"    Tool evidence: {f.evidence_source or 'none'}\n"
+            evidence_block += f"    Confidence: {f.confidence}{withdrawn_tag}\n"
+
+            if f.rebuttal:
+                evidence_block += f"    Rebuttal from cross-exam: {f.rebuttal[:150]}\n"
+
+            if cluster and cluster.has_conflict:
+                # Show what the opposing agent said
+                opponents = [
+                    of for of in cluster.findings
+                    if of.agent != f.agent and not of.withdrawn
+                ]
+                if opponents:
+                    opp = opponents[0]
+                    evidence_block += (
+                        f"    Opposing argument ({opp.agent}, {opp.finding_id}): "
+                        f"[{opp.severity}] {opp.claim[:100]} "
+                        f"(confidence: {opp.confidence}"
+                        f"{', WITHDRAWN' if opp.withdrawn else ''})\n"
+                    )
+                state = "RESOLVED" if cluster.resolved else "UNRESOLVED"
+                evidence_block += f"    Cross-exam outcome: {state} after {cluster.debate_rounds} round(s)\n"
+            elif cluster and not cluster.has_conflict:
+                evidence_block += "    Cross-exam: No conflict — uncontested finding\n"
+
+            parts.append(evidence_block)
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _compute_verdict(rubric: dict) -> str:
+        """
+        Deterministic verdict from rubric scores.
+        No LLM guessing — the verdict is computed from the evidence.
+        """
+        sec = rubric["security"]
+        perf = rubric["performance"]
+        maint = rubric["maintainability"]
+        avg = (sec + perf + maint) / 3
+
+        if sec <= 3:
+            return "REJECTED"
+        elif avg < 5 or sec <= 5:
+            return "APPROVED WITH CONDITIONS"
+        else:
+            return "APPROVED"
 
     def _build_evidence_summary(
         self,
@@ -108,7 +192,7 @@ class ArbiterAgent(BaseAgent):
         ]
         if uncontested:
             parts.append("UNCONTESTED FINDINGS:")
-            for f in uncontested[:10]:  # Limit to avoid token explosion
+            for f in uncontested[:10]:
                 parts.append(
                     f"  {f.finding_id}: [{f.severity}] {f.agent} at lines "
                     f"{f.line_start}-{f.line_end} — {f.claim[:100]} "
@@ -120,7 +204,8 @@ class ArbiterAgent(BaseAgent):
         if active_clusters:
             parts.append("\nCONTESTED ISSUES (cross-examined):")
             for c in active_clusters:
-                parts.append(f"  {c.cluster_id}: lines {c.line_start}-{c.line_end}")
+                state = "RESOLVED" if c.resolved else "UNRESOLVED"
+                parts.append(f"  {c.cluster_id}: lines {c.line_start}-{c.line_end} [{state}]")
                 for f in c.findings:
                     withdrawn_tag = " [WITHDRAWN]" if f.withdrawn else ""
                     rebuttal = f" — rebuttal: {f.rebuttal}" if f.rebuttal else ""
@@ -185,14 +270,23 @@ class ArbiterAgent(BaseAgent):
         )
 
         # ── Maintainability Score ──────────────────────────────────
-        # Based on contested cluster outcomes + uncontested finding count
-        contested = [c for c in clusters if c.has_conflict and not c.resolved]
-        resolved = [c for c in clusters if c.resolved]
-        maint_penalty = len(contested) * 1.5 + max(0, len(active) - 5) * 0.3
+        # Based on unresolved contested clusters + total finding count.
+        # Clusters that were debated and CONCLUDEd (by ARBITER or max rounds)
+        # are treated as resolved — they got their due process.
+        # Only clusters still actively disputed with no resolution count against.
+        contested_unresolved = [
+            c for c in clusters
+            if c.has_conflict and not c.resolved
+        ]
+        resolved_count = sum(
+            1 for c in clusters
+            if c.resolved or not c.has_conflict
+        )
+        maint_penalty = len(contested_unresolved) * 1.5 + max(0, len(active) - 5) * 0.3
         maintainability = max(0, min(10, round(10 - maint_penalty)))
         maintainability_detail = (
-            f"{len(resolved)} resolved clusters, "
-            f"{len(contested)} unresolved disputes, "
+            f"{resolved_count} resolved/uncontested, "
+            f"{len(contested_unresolved)} unresolved disputes, "
             f"penalty {maint_penalty:.1f}"
         )
 
@@ -203,6 +297,11 @@ class ArbiterAgent(BaseAgent):
             "security_detail": security_detail,
             "performance_detail": performance_detail,
             "maintainability_detail": maintainability_detail,
+            "verdict": ArbiterAgent._compute_verdict({
+                "security": security,
+                "performance": performance,
+                "maintainability": maintainability,
+            }),
         }
 
     async def procedural_ruling(

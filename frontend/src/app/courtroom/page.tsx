@@ -73,6 +73,7 @@ function CourtroomContent() {
   const [tokenUsage, setTokenUsage] = useState<Record<string, number> | null>(null);
   const [currentPhase, setCurrentPhase] = useState("investigation");
   const [conflictClusters, setConflictClusters] = useState<ConflictCluster[]>([]);
+  const [rubricVerdict, setRubricVerdict] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<Proceeding[]>([]);
@@ -166,6 +167,7 @@ function CourtroomContent() {
           setCurrentPhase("complete");
           if (msg.token_usage) setTokenUsage(msg.token_usage);
           if (msg.conflict_clusters) setConflictClusters(msg.conflict_clusters);
+          if (msg.rubric_scores?.verdict) setRubricVerdict(msg.rubric_scores.verdict);
         } else if (msg.type === "error") {
           if (redirectedRef.current) return;
           redirectedRef.current = true;
@@ -403,7 +405,7 @@ function CourtroomContent() {
         isOpen={showVerdict}
         onClose={() => setShowVerdict(false)}
         onNewCase={handleNewCase}
-        verdict={verdictText ? (scores.security >= 7 ? "APPROVED" : "APPROVED WITH CONDITIONS") : "PENDING"}
+        verdict={rubricVerdict || "PENDING"}
         scores={scores}
         recommendations={verdictRecommendations}
         conflictClusters={conflictClusters}

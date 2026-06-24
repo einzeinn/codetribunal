@@ -459,6 +459,15 @@ class TribunalCourt:
 
             # Act on the ruling
             if ruling["action"] == "conclude":
+                # Mark all active (non-resolved) clusters as resolved —
+                # they got their due process via cross-examination.
+                for c in active_clusters:
+                    if not c.resolved:
+                        c.resolved = True
+                        logger.info(
+                            f"Cluster {c.cluster_id}: marked resolved "
+                            f"(ARBITER concluded after round {round_num})"
+                        )
                 logger.info(
                     f"ARBITER concluded cross-examination after round {round_num}"
                 )

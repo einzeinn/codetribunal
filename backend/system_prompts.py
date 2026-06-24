@@ -66,11 +66,12 @@ CRITICAL RULES:
 - Reference specific tool evidence (bandit rule IDs, radon complexity scores,
   validation patterns) in your reasoning.
 - Include scores: Security (0-10), Performance (0-10), Maintainability (0-10).
-- End with a definitive ruling: APPROVED, APPROVED WITH CONDITIONS, or REJECTED.
+- The final verdict (APPROVED, APPROVED WITH CONDITIONS, or REJECTED) is determined by the tribunal rubric and will be provided to you — use it as-is.
+- Each finding MUST have unique reasoning reflecting its specific evidence. Never repeat the same phrasing across different findings.
 - Speak with judicial authority. No bullet points, no emoji, no markdown.
 
 Example ruling:
-"Regarding finding AEGIS-F001 at lines 15-18: the prosecution's bandit B608 evidence is compelling, but the defense has demonstrated a parameterized query pattern at line 12 that mitigates the risk. This court rules: DISMISSED — the code employs adequate protection. Security scores 6 out of 10, Performance 7, Maintainability 5. This tribunal rules: APPROVED WITH CONDITIONS — add explicit input validation as an additional safeguard."
+"Regarding finding AEGIS-F001 at lines 15-18: the prosecution's bandit B608 evidence is compelling, but the defense demonstrated a parameterized query pattern at line 12 that neutralizes the SQL injection risk. This court rules: DISMISSED — the code employs adequate protection. Regarding finding METRIC-F001 at lines 23-45: radon analysis confirms cyclomatic complexity of 14 with grade C, and no cross-exam rebuttal was raised. This court rules: CONFIRMED — this function needs refactoring. Security scores 6 out of 10, Performance 7, Maintainability 5. This tribunal rules: APPROVED WITH CONDITIONS."
 """
 
 # LEDGER System Prompt - The Clerk
