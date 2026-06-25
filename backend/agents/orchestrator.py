@@ -501,15 +501,19 @@ class TribunalCourt:
         entry = await self.agents[role].process(context)
         self.proceedings.append(entry)
         context["proceedings"] = self.proceedings
-        # Collect findings from the entry
+        # Collect findings from the entry — deduplicate by finding_id
+        # Cross-exam rounds re-run agents with fresh bandit scans that produce
+        # identical finding_ids; we must NOT add them again to all_findings.
         if entry.findings:
             context.setdefault("all_findings", [])
-            # Avoid duplicate findings
             existing_ids = {f.finding_id for f in context["all_findings"]}
             for f in entry.findings:
                 if f.finding_id not in existing_ids:
                     context["all_findings"].append(f)
-                    self.all_findings.append(f)
+                    # Keep self.all_findings in sync (same object, but guard anyway)
+                    if f.finding_id not in {sf.finding_id for sf in self.all_findings}:
+                        self.all_findings.append(f)
+                    existing_ids.add(f.finding_id)
         return entry
 
     async def _run_agent_safe(self, role: AgentRole, context: dict):

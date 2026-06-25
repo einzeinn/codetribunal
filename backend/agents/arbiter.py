@@ -48,6 +48,22 @@ class ArbiterAgent(BaseAgent):
         conflict_clusters: List[ConflictCluster],
         context: dict,
     ) -> ProceedingEntry:
+        # ── Deduplicate findings by finding_id ──
+        # Safety net: cross-exam rounds may produce duplicate entries in all_findings.
+        # Keep the FIRST occurrence (original from investigation phase), discard rest.
+        seen_ids = set()
+        deduped_findings = []
+        for f in all_findings:
+            if f.finding_id not in seen_ids:
+                seen_ids.add(f.finding_id)
+                deduped_findings.append(f)
+        if len(deduped_findings) < len(all_findings):
+            logger.info(
+                f"Deduped all_findings: {len(all_findings)} -> {len(deduped_findings)} "
+                f"(removed {len(all_findings) - len(deduped_findings)} duplicates)"
+            )
+        all_findings = deduped_findings
+
         # Build per-finding evidence block for the LLM
         per_finding_evidence = self._build_per_finding_evidence(
             all_findings, conflict_clusters
@@ -93,8 +109,12 @@ class ArbiterAgent(BaseAgent):
             "original agent provided an equally strong counter\n\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
             "Keep each item ruling to 2-3 sentences.\n\n"
-            "IMPORTANT: After all per-finding rulings, end with your final verdict: "
-            "APPROVED, APPROVED WITH CONDITIONS, or REJECTED."
+            "IMPORTANT: After all per-finding rulings, end with ONLY the words "
+            "APPROVED, APPROVED WITH CONDITIONS, or REJECTED — as a single phrase. "
+            "Do NOT write 'Security scores X out of 10' or any numeric assessment. "
+            "Do NOT summarize with score estimates. The tribunal's official scores are "
+            "computed deterministically and will be appended AFTER your response. "
+            "Any scores you write will be WRONG and CONTRADICT the official assessment."
         )
 
         content, usage = await self._call_llm(
