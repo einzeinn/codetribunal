@@ -109,12 +109,12 @@ class ArbiterAgent(BaseAgent):
             "original agent provided an equally strong counter\n\n"
             "Speak with judicial authority. No bullet points, no emoji, no markdown. "
             "Keep each item ruling to 2-3 sentences.\n\n"
-            "IMPORTANT: After all per-finding rulings, end with ONLY the words "
-            "APPROVED, APPROVED WITH CONDITIONS, or REJECTED — as a single phrase. "
-            "Do NOT write 'Security scores X out of 10' or any numeric assessment. "
-            "Do NOT summarize with score estimates. The tribunal's official scores are "
-            "computed deterministically and will be appended AFTER your response. "
-            "Any scores you write will be WRONG and CONTRADICT the official assessment."
+            "IMPORTANT: Do NOT write a final verdict word (no APPROVED, no APPROVED WITH "
+            "CONDITIONS, no REJECTED). Do NOT write any numeric scores. Do NOT write a "
+            "summary or concluding sentence. Stop immediately after your last per-finding "
+            "ruling. The tribunal's official final verdict word and scores are computed "
+            "deterministically by the system and will be appended after your response — "
+            "writing your own would create a contradiction."
         )
 
         content, usage = await self._call_llm(
@@ -144,6 +144,17 @@ class ArbiterAgent(BaseAgent):
         # ── Step 5: Compute verdict from corrected scores ──
         verdict = self._compute_verdict(rubric)
 
+        # ── Defensive backstop: strip any trailing verdict word the LLM wrote ──
+        # Even though the prompt forbids it, LLMs sometimes disobey.
+        # Strip a trailing line that is JUST "APPROVED", "APPROVED WITH CONDITIONS",
+        # or "REJECTED" (case-insensitive) before appending the real score_block.
+        content = content.rstrip()
+        _TRAILING_VERDICT_RE = re.compile(
+            r"\n\s*(APPROVED\s+WITH\s+CONDITIONS|APPROVED|REJECTED)\s*\.?\s*$",
+            re.IGNORECASE,
+        )
+        content = _TRAILING_VERDICT_RE.sub("", content).rstrip()
+
         # ── Step 6: Append score block to verdict text ──
         score_block = (
             f"\n\nTRIBUNAL ASSESSMENT: "
@@ -152,7 +163,7 @@ class ArbiterAgent(BaseAgent):
             f"Maintainability {rubric['maintainability']}/10 ({rubric['maintainability_detail']}). "
             f"Final ruling: {verdict}."
         )
-        content = content.rstrip() + score_block
+        content = content + score_block
 
         # Build verdict proceeding with structured metadata
         primary_line = all_findings[0].line_start if all_findings else 1
@@ -239,7 +250,33 @@ class ArbiterAgent(BaseAgent):
         Build a per-finding evidence block with cross-exam outcomes.
         Gives the LLM specific context for each finding so it can produce
         differentiated reasoning instead of template text.
+
+        NOTE: AXIOM/METRIC findings are deduplicated semantically here for
+        verdict-text readability only. They are never included in
+        _compute_rubric_scores (only AEGIS/METRIC security findings are),
+        so this dedup does NOT change any numeric score. If it ever does
+        affect a score, something else is reading AXIOM findings for
+        scoring and that's a separate bug.
         """
+        # ── Semantic dedup: collapse findings that argue the same point ──
+        # AXIOM generates new finding_ids each cross-exam round for the same
+        # underlying argument (e.g., AXIOM-F002 in R1, AXIOM-F006 in R2,
+        # AXIOM-F009 in R3, all defending "API_TOKEN is not a password").
+        # Key by (agent, line_start, line_end, first 50 chars of claim).
+        seen_semantic = set()
+        deduped = []
+        for f in findings:
+            key = (f.agent, f.line_start, f.line_end, f.claim[:50].lower())
+            if key not in seen_semantic:
+                seen_semantic.add(key)
+                deduped.append(f)
+        if len(deduped) < len(findings):
+            logger.info(
+                f"Semantic dedup in evidence block: {len(findings)} -> {len(deduped)} "
+                f"(collapsed {len(findings) - len(deduped)} repeated arguments)"
+            )
+        findings = deduped
+
         # Map findings to their cluster (if any)
         finding_cluster: dict = {}
         for c in clusters:
@@ -409,7 +446,11 @@ class ArbiterAgent(BaseAgent):
         )
 
         # ── Security Score ─────────────────────────────────────────
-        # Penalise confirmed security findings by severity weight
+        # Penalise confirmed security findings by severity weight.
+        # NOTE: Only AEGIS and METRIC findings count toward security penalty.
+        # AXIOM findings are defense arguments and are NEVER included in scoring.
+        # This is an intentional invariant — AXIOM dedup in _build_per_finding_evidence
+        # is purely for verdict-text readability and cannot affect this score.
         sec_confirmed = [
             f for f in confirmed
             if f.category == "security" and f.agent in ("AEGIS", "METRIC")
