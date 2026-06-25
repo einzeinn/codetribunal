@@ -69,7 +69,11 @@ class ArbiterAgent(BaseAgent):
         # from cross-examination.
         semantic_seen: dict = {}  # key -> index in deduped list (last wins)
         for i, f in enumerate(deduped_findings):
-            key = (f.agent, f.line_start, f.line_end, f.claim[:50].lower())
+            # NOTE: line_end is EXCLUDED from the key because AXIOM may shift
+            # its line_end across rounds (e.g. 27-30 in R1, 30-35 in R3) while
+            # arguing the same underlying point. agent+line_start+claim prefix
+            # is sufficient to identify a unique argument.
+            key = (f.agent, f.line_start, f.claim[:50].lower())
             semantic_seen[key] = i  # overwrite → keep last
         kept_indices = sorted(semantic_seen.values())
         semantic_deduped = [deduped_findings[i] for i in kept_indices]
@@ -287,7 +291,7 @@ class ArbiterAgent(BaseAgent):
         seen_semantic = set()
         deduped = []
         for f in findings:
-            key = (f.agent, f.line_start, f.line_end, f.claim[:50].lower())
+            key = (f.agent, f.line_start, f.claim[:50].lower())
             if key not in seen_semantic:
                 seen_semantic.add(key)
                 deduped.append(f)
