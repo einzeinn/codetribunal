@@ -48,9 +48,8 @@ class ArbiterAgent(BaseAgent):
         conflict_clusters: List[ConflictCluster],
         context: dict,
     ) -> ProceedingEntry:
-        # ── Deduplicate findings by finding_id ──
+        # ── Pass 1: Deduplicate findings by finding_id ──
         # Safety net: cross-exam rounds may produce duplicate entries in all_findings.
-        # Keep the FIRST occurrence (original from investigation phase), discard rest.
         seen_ids = set()
         deduped_findings = []
         for f in all_findings:
@@ -59,10 +58,28 @@ class ArbiterAgent(BaseAgent):
                 deduped_findings.append(f)
         if len(deduped_findings) < len(all_findings):
             logger.info(
-                f"Deduped all_findings: {len(all_findings)} -> {len(deduped_findings)} "
-                f"(removed {len(all_findings) - len(deduped_findings)} duplicates)"
+                f"Pass-1 dedup (finding_id): {len(all_findings)} -> {len(deduped_findings)}"
             )
-        all_findings = deduped_findings
+
+        # ── Pass 2: Semantic dedup — collapse findings that argue the same point ──
+        # AXIOM generates NEW finding_ids every cross-exam round for the SAME
+        # underlying argument (e.g. AXIOM-F002 R1, AXIOM-F006 R2, AXIOM-F009 R3
+        # all defend "API_TOKEN is not a password"). Keep the LAST occurrence
+        # (latest round) because it carries the most up-to-date confidence/rebuttal
+        # from cross-examination.
+        semantic_seen: dict = {}  # key -> index in deduped list (last wins)
+        for i, f in enumerate(deduped_findings):
+            key = (f.agent, f.line_start, f.line_end, f.claim[:50].lower())
+            semantic_seen[key] = i  # overwrite → keep last
+        kept_indices = sorted(semantic_seen.values())
+        semantic_deduped = [deduped_findings[i] for i in kept_indices]
+        if len(semantic_deduped) < len(deduped_findings):
+            removed = len(deduped_findings) - len(semantic_deduped)
+            logger.info(
+                f"Pass-2 semantic dedup: {len(deduped_findings)} -> {len(semantic_deduped)} "
+                f"(collapsed {removed} repeated arguments)"
+            )
+        all_findings = semantic_deduped
 
         # Build per-finding evidence block for the LLM
         per_finding_evidence = self._build_per_finding_evidence(
@@ -81,6 +98,10 @@ class ArbiterAgent(BaseAgent):
             "EXACTLY as shown above (e.g. 'lines 15-18'). Do NOT invent, swap, or combine "
             "line numbers from different findings. If the evidence says 'lines 15-18', "
             "write 'lines 15-18' — never 'lines 18-15' or any other range.\n\n"
+            "CRITICAL: Rule ONLY on the findings listed in the PER-FINDING EVIDENCE "
+            "block above. Do NOT rule on any other finding IDs you may see mentioned "
+            "in the transcript — those are earlier rounds of the same arguments and "
+            "have been consolidated into the single representative ID shown above.\n\n"
             "INSTRUCTIONS FOR EACH FINDING:\n"
             "- State the finding ID and line range\n"
             "- Status: CONFIRMED, DISMISSED, or DISPUTED\n"
