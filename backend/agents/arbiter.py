@@ -122,6 +122,17 @@ class ArbiterAgent(BaseAgent):
             "- Example: 'SQL query pattern' but defense showed parameterized queries elsewhere — rule DISPUTED\n"
             "- DISPUTED means: the code pattern IS risky in general, but in THIS specific context the risk is reduced\n"
             "- Do NOT binary-force everything to CONFIRMED or DISMISSED — use DISPUTED for legitimate middle ground\n\n"
+            "EXPERT WITNESS (METRIC) FINDINGS — SPECIAL RULE:\n"
+            "- METRIC is an expert witness providing complexity/performance analysis, "
+            "not a prosecutor or defender. METRIC findings are OBSERVATIONS, not contested claims.\n"
+            "- For METRIC findings, use status: ACKNOWLEDGED (not CONFIRMED/DISMISSED/DISPUTED)\n"
+            "- State the finding ID, briefly summarise METRIC's analysis, then write: "
+            "'This court ACKNOWLEDGES the expert witness's analysis.'\n"
+            "- Do NOT dismiss METRIC findings as if they were a claim to be refuted. "
+            "METRIC's complexity grades and security observations are corroborating evidence, not accusations.\n"
+            "- Example: 'Regarding finding METRIC-F001: radon confirms complexity grade A "
+            "with no control-flow concerns. The expert witness correctly notes the SQL "
+            "injection risk. This court ACKNOWLEDGES the analysis.'\n\n"
             "REBUTTAL EVALUATION RULES (FOLLOW STRICTLY):\n"
             "- If an opposing agent provided a specific, evidence-backed rebuttal (citing AST analysis, "
             "tool output, or code patterns) with confidence >= 0.8, and the original agent did NOT "
@@ -160,6 +171,8 @@ class ArbiterAgent(BaseAgent):
                     f.verdict_status = status  # type: ignore[attr-defined]
                     if status == "DISMISSED":
                         f.withdrawn = True  # Dismissed = no scoring penalty
+                    elif status == "ACKNOWLEDGED":
+                        f.withdrawn = True  # Expert witness observation = no scoring penalty
                     logger.info(
                         f"ARBITER verdict: {finding_id} -> {status}"
                     )
@@ -224,13 +237,15 @@ class ArbiterAgent(BaseAgent):
         # Pattern 3: With em dash — "AEGIS-F001 — CONFIRMED"
         # Pattern 4: Sentence format — "AEGIS-F001 is CONFIRMED" or "AEGIS-F001 is ruled DISMISSED"
         # Pattern 5: Prefix format — "For AEGIS-F001: DISPUTED" or "Regarding AEGIS-F001: CONFIRMED"
+        # All patterns also match ACKNOWLEDGED for expert-witness (METRIC) findings.
+        _STATUSES = "CONFIRMED|DISMISSED|DISPUTED|ACKNOWLEDGED"
         patterns = [
-            # Direct: "AEGIS-F001: CONFIRMED" or "AEGIS-F001 (lines 15-18): DISMISSED"
-            r"(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)(?:\s*\([^)]*\))?\s*[-:—–]\s*(CONFIRMED|DISMISSED|DISPUTED)",
-            # Sentence: "AEGIS-F001 is CONFIRMED" or "AEGIS-F001 is ruled DISMISSED"
-            r"(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)\s+(?:is\s+(?:ruled\s+)?|was\s+(?:ruled\s+)?)(CONFIRMED|DISMISSED|DISPUTED)",
-            # Prefix: "For AEGIS-F001: DISPUTED" or "Regarding AEGIS-F001, CONFIRMED"
-            r"(?:for|regarding|as\s+for)\s+(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)[,:\s]+(?:ruled\s+)?(CONFIRMED|DISMISSED|DISPUTED)",
+            # Direct: "AEGIS-F001: CONFIRMED" or "METRIC-F001 (lines 1-40): ACKNOWLEDGED"
+            rf"(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)(?:\s*\([^)]*\))?\s*[-:—–]\s*(?:ruled\s+)?({_STATUSES})",
+            # Sentence: "AEGIS-F001 is CONFIRMED" or "METRIC-F001 is ACKNOWLEDGED"
+            rf"(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)\s+(?:is\s+(?:ruled\s+)?|was\s+(?:ruled\s+)?|court\s+\w+\s+)(CONFIRMED|DISMISSED|DISPUTED|ACKNOWLEDGED)",
+            # Prefix: "For AEGIS-F001: DISPUTED" or "Regarding METRIC-F001, ACKNOWLEDGED"
+            rf"(?:for|regarding|as\s+for)\s+(AEGIS-F\d+|AXIOM-F\d+|METRIC-F\d+|LEDGER-F\d+)[,:\s]+(?:ruled\s+)?({_STATUSES})",
         ]
 
         for pattern in patterns:
@@ -259,6 +274,8 @@ class ArbiterAgent(BaseAgent):
                 if f.finding_id not in statuses:
                     if f.withdrawn:
                         statuses[f.finding_id] = "DISMISSED"
+                    elif f.agent == "METRIC":
+                        statuses[f.finding_id] = "ACKNOWLEDGED"
                     else:
                         statuses[f.finding_id] = "CONFIRMED"
                     logger.info(
