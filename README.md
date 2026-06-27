@@ -158,7 +158,7 @@ When AXIOM provides AST-level proof of non-usage (e.g., "subprocess is never cal
 The courtroom frontend is a full-screen **visual novel-style** interface where the trial unfolds as a cinematic narrative. Key features:
 
 ### Character Sprites & Agent Theming
-- Each agent has a unique **SVG sprite** with multiple poses (neutral, active, writing, ruling)
+- Each agent has a unique **illustrated character sprite (AI-generated PNG artwork)** with multiple poses (neutral, active, writing, ruling)
 - Agents are arranged in a 3-panel layout: AEGIS, AXIOM, METRIC side-by-side
 - **ARBITER** appears as a full-screen overlay when delivering the verdict
 - **LEDGER** sits in the bottom-right corner as a persistent clerk
