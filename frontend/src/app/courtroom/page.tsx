@@ -2,10 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import AgentBench from "../../../components/agents/AgentBench";
-import ProceedingsFeed, { type Proceeding } from "../../../components/proceedings/ProceedingsFeed";
-import QuestLog from "../../../components/ui/QuestLog";
-import ScoreBar from "../../../components/ui/ScoreBar";
+import { type Proceeding } from "../../../components/proceedings/ProceedingsFeed";
 import VerdictModal, { type ConflictCluster } from "../../../components/verdict/VerdictModal";
 import CourtroomStage from "../../../components/courtroom/CourtroomStage";
 
@@ -31,36 +28,13 @@ const PHASE_LABELS: Record<string, string> = {
   complete: "Complete",
 };
 
-function DiamondDivider() {
-  return (
-    <div className="diamond-divider">
-      <div className="diamond" />
-    </div>
-  );
-}
-
-function PhaseProgressBar({ currentPhase }: { currentPhase: string }) {
-  const currentIndex = PHASE_ORDER.indexOf(currentPhase);
-  return (
-    <div className="phase-progress w-full">
-      {PHASE_ORDER.slice(0, -1).map((phase, i) => (
-        <div
-          key={phase}
-          className={`phase-step ${
-            i < currentIndex ? "completed" : i === currentIndex ? "active" : ""
-          }`}
-          title={PHASE_LABELS[phase]}
-        />
-      ))}
-    </div>
-  );
-}
 
 function CourtroomContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get("session_id");
-  const caseTitle = searchParams.get("title") || "Unknown Case";
+  const _caseTitle = searchParams.get("title") || "Unknown Case";
+  void _caseTitle; // preserved for future use
 
   const [proceedings, setProceedings] = useState<Proceeding[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -222,7 +196,8 @@ function CourtroomContent() {
     };
   }, [sessionId, connectWebSocket, router]);
 
-  const getAgentStatuses = useCallback(() => {
+  // Agent status helpers (kept for VerdictModal conflict display)
+  const _getAgentStatuses = useCallback(() => {
     const spokenAgents = new Set(proceedings.map((p) => p.agent));
     return Object.keys(AGENT_ROLES).map((name) => {
       const isSpeaking = name === activeAgent;
@@ -235,22 +210,25 @@ function CourtroomContent() {
       };
     });
   }, [proceedings, activeAgent]);
+  void _getAgentStatuses;
 
-  const questItems = [
+  const _questItems = [
     { text: "Case filed & parsed (LEDGER)", completed: proceedings.some((p) => p.agent === "LEDGER") },
     { text: "Parallel investigation (AEGIS, AXIOM, METRIC)", completed: currentPhase !== "investigation" && proceedings.some((p) => p.agent === "AEGIS") },
     { text: "Conflict detection", completed: ["cross_examination", "verdict", "complete"].includes(currentPhase) },
     { text: "Cross-examination (if conflicts)", completed: ["verdict", "complete"].includes(currentPhase) },
     { text: "Per-item verdict (ARBITER)", completed: isComplete },
   ];
+  void _questItems;
 
-  const currentObjective = isComplete
+  const _currentObjective = isComplete
     ? "Verdict rendered. The tribunal has spoken."
     : !isConnected
     ? "Awaiting tribunal assembly..."
     : proceedings.length === 0
     ? "Summoning the court officers..."
     : `Phase: ${PHASE_LABELS[currentPhase] || currentPhase}`;
+  void _currentObjective;
 
   const handleShowVerdict = () => {
     redirectedRef.current = true;

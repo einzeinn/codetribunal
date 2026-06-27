@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function HeroPage() {
   return (
@@ -6,10 +7,13 @@ export default function HeroPage() {
       <div className="relative z-10 flex flex-col items-center">
         {/* Inquisitor Sword — color-adaptive via currentColor */}
         <div className="text-text-primary" style={{ color: "var(--text-primary)" }}>
-          <img
+          <Image
             src="/vectors/inquisitor-sword.svg"
             alt="Inquisitor Sword"
+            width={256}
+            height={358}
             className="w-48 h-auto md:w-64"
+            priority
           />
         </div>
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export default function EnterPage() {
   return (
@@ -6,9 +7,11 @@ export default function EnterPage() {
       <div className="max-w-4xl w-full flex flex-col md:flex-row items-center gap-8 md:gap-16">
         {/* Sword — Left side */}
         <div className="flex-shrink-0 text-text-primary" style={{ color: "var(--text-primary)" }}>
-          <img
+          <Image
             src="/vectors/inquisitor-sword.svg"
             alt="Inquisitor Sword"
+            width={160}
+            height={224}
             className="w-32 h-auto md:w-40"
           />
         </div>
