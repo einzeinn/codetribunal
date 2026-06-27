@@ -23,6 +23,10 @@ interface CourtroomStageProps {
   currentPhase: string;
   /** Is an agent currently typing */
   isTyping: boolean;
+  /** Force typewriter to skip to end (VN click-to-skip) */
+  forceCompleteTypewriter?: boolean;
+  /** Whether typewriter has finished for the current message */
+  typewriterDone?: boolean;
   /** Rubric scores */
   scores: { security: number; performance: number; maintainability: number };
   /** Whether the trial is complete */
@@ -37,6 +41,8 @@ interface CourtroomStageProps {
   onRequestVerdict?: () => void;
   /** Callback: user wants new case */
   onNewCase?: () => void;
+  /** Callback: user clicked to advance (VN skip/advance) */
+  onAdvance?: () => void;
   /** Token usage for display */
   tokenCount?: number;
 }
@@ -158,10 +164,10 @@ function PhaseProgress({ currentPhase }: { currentPhase: string }) {
 
 function ArbiterOverlay({
   dialogue,
-  onClose,
+  forceComplete,
 }: {
   dialogue: string | null;
-  onClose?: () => void;
+  forceComplete?: boolean;
 }) {
   return (
     <motion.div
@@ -171,13 +177,8 @@ function ArbiterOverlay({
       exit={{ y: -20, opacity: 0 }}
       transition={{ type: "spring", bounce: 0.3, duration: 0.5 }}
     >
-      {/* Dimmed backdrop — 3 panels still visible behind */}
-      <div
-        className="absolute inset-0 bg-black/70"
-        onClick={onClose}
-        role="button"
-        tabIndex={-1}
-      />
+      {/* Dimmed backdrop — clicks bubble up to stage for VN advance */}
+      <div className="absolute inset-0 bg-black/70" />
 
       {/* ARBITER character — full screen height, dominates the stage */}
       <div className="relative z-10 flex flex-col items-center justify-end h-full max-h-[80vh] w-[380px] md:w-[520px]">
@@ -186,6 +187,7 @@ function ArbiterOverlay({
           pose="active"
           isSpeaking
           dialogue={dialogue}
+          forceComplete={forceComplete}
         />
       </div>
     </motion.div>
@@ -199,6 +201,8 @@ export default function CourtroomStage({
   activeDialogue,
   currentPhase,
   isTyping,
+  forceCompleteTypewriter = false,
+  typewriterDone = false,
   scores,
   isComplete,
   verdictText,
@@ -206,6 +210,7 @@ export default function CourtroomStage({
   conflictCount = 0,
   onRequestVerdict,
   onNewCase,
+  onAdvance,
   tokenCount,
 }: CourtroomStageProps) {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
@@ -252,7 +257,11 @@ export default function CourtroomStage({
   });
 
   return (
-    <div className="relative w-full h-full min-h-screen flex flex-col overflow-hidden">
+    <div
+      className="relative w-full h-full min-h-screen flex flex-col overflow-hidden cursor-pointer"
+      onClick={onAdvance}
+      role="presentation"
+    >
       {/* Background layer — dark mahogany gradient */}
       <div
         className="absolute inset-0 z-0"
@@ -333,6 +342,7 @@ export default function CourtroomStage({
                   pose={state.pose}
                   isSpeaking={state.isSpeaking}
                   dialogue={state.dialogue}
+                  forceComplete={state.isSpeaking ? forceCompleteTypewriter : false}
                 />
               </motion.div>
             );
@@ -363,7 +373,26 @@ export default function CourtroomStage({
         {/* ARBITER overlay */}
         <AnimatePresence>
           {isArbiterActive && (
-            <ArbiterOverlay dialogue={activeDialogue} />
+            <ArbiterOverlay dialogue={activeDialogue} forceComplete={forceCompleteTypewriter} />
+          )}
+        </AnimatePresence>
+
+        {/* Click-to-advance hint — appears when typewriter is done */}
+        <AnimatePresence>
+          {activeDialogue && typewriterDone && !isComplete && (
+            <motion.div
+              className="absolute bottom-4 left-1/2 z-20 flex items-center gap-1.5"
+              style={{ x: "-50%" }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3, delay: 0.2 }}
+            >
+              <span className="text-gold text-[14px] animate-bounce">▼</span>
+              <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold/70 tracking-[0.15em] uppercase">
+                click to continue
+              </span>
+            </motion.div>
           )}
         </AnimatePresence>
       </div>

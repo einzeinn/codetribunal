@@ -9,11 +9,12 @@ import CourtroomStage from "../../../components/courtroom/CourtroomStage";
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 const MESSAGE_DELAY = 800;
 
-/** Dynamic speaking duration: time for typewriter to finish + reading buffer */
+/** Dynamic speaking duration: time for typewriter to finish + reading buffer.
+ *  Click-to-advance (VN pattern) lets users skip this, so we keep it tight. */
 function getSpeakingDuration(text: string): number {
   const charCount = text.length;
-  // 35ms per char (typewriter speed) + 2500ms reading buffer, min 5s
-  return Math.max(5000, charCount * 40 + 2500);
+  // 40ms per char typewriter + 900ms reading buffer, floor 2.2s for short messages
+  return Math.max(2200, charCount * 40 + 900);
 }
 
 const AGENT_ROLES: Record<string, string> = {
@@ -65,8 +66,14 @@ function CourtroomContent() {
   const wsOpenedRef = useRef(false);
   const redirectedRef = useRef(false);
   // Defer "completion" WS message until the queue has been fully drained
-  // so the UI doesn't jump to "complete" mid-playback while agents are still speaking
   const pendingCompletionRef = useRef<Record<string, unknown> | null>(null);
+
+  // ─── VN click-to-advance state ───
+  const [forceCompleteTypewriter, setForceCompleteTypewriter] = useState(false);
+  const [typewriterDone, setTypewriterDone] = useState(false);
+  const readingBufferTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typewriterTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Apply all state updates from the WS "completion" message */
   const applyCompletion = useCallback((msg: Record<string, unknown>) => {
@@ -98,6 +105,7 @@ function CourtroomContent() {
       if (messageQueueRef.current.length === 0) {
         isProcessingQueue.current = false;
         setIsTyping(false);
+        setTypewriterDone(false);
         // Queue empty — now apply any deferred completion payload
         if (pendingCompletionRef.current) {
           const pending = pendingCompletionRef.current;
@@ -107,6 +115,9 @@ function CourtroomContent() {
         return;
       }
 
+      // Reset VN state for new message
+      setForceCompleteTypewriter(false);
+      setTypewriterDone(false);
       setIsTyping(true);
 
       setTimeout(() => {
@@ -132,7 +143,6 @@ function CourtroomContent() {
         }
 
         if (msg.tag === "Final Verdict") {
-          // Use deterministic rubric_scores from backend — NOT LLM text parsing
           setVerdictText(msg.message);
           if (msg.rubric_scores) {
             setScores({
@@ -144,21 +154,75 @@ function CourtroomContent() {
           }
         }
 
-        // Wait for typewriter to finish + reading buffer before next message
-        const displayDuration = getSpeakingDuration(msg.message);
-
-        setTimeout(() => {
-          setActiveAgent((current) => (current === msg.agent ? "" : current));
-          setActiveDialogue((current) => current === msg.message ? null : current);
-          setIsTyping(false);
-          // Process next message after a brief pause
-          setTimeout(processNext, 400);
-        }, displayDuration);
+        // Phase 1: typewriter runs at CHAR_SPEED_MS (35ms/char)
+        const typewriterDuration = msg.message.length * 35;
+        typewriterTimeoutRef.current = setTimeout(() => {
+          setTypewriterDone(true);
+          // Phase 2: reading buffer
+          const readingDuration = getSpeakingDuration(msg.message) - typewriterDuration;
+          readingBufferTimeoutRef.current = setTimeout(() => {
+            advanceTimeoutRef.current = setTimeout(() => {
+              setActiveAgent((current) => (current === msg.agent ? "" : current));
+              setActiveDialogue((current) => current === msg.message ? null : current);
+              setIsTyping(false);
+              setTypewriterDone(false);
+              setTimeout(processNext, 400);
+            }, 400);
+          }, Math.max(0, readingDuration));
+        }, typewriterDuration);
       }, MESSAGE_DELAY);
     };
 
     processNext();
   }, [applyCompletion]);
+
+  /** VN click-to-advance: 1st click skips typewriter, 2nd click advances to next message */
+  const handleAdvance = useCallback(() => {
+    // Nothing to advance if no active speaker or trial is done
+    if (!activeDialogue || isComplete) return;
+
+    if (!typewriterDone) {
+      // First click: skip typewriter, reveal all text instantly
+      setForceCompleteTypewriter(true);
+      setTypewriterDone(true);
+      // Clear the typewriter timeout (Phase 1)
+      if (typewriterTimeoutRef.current) {
+        clearTimeout(typewriterTimeoutRef.current);
+        typewriterTimeoutRef.current = null;
+      }
+      // Also clear any reading buffer that hasn't started yet
+      if (readingBufferTimeoutRef.current) {
+        clearTimeout(readingBufferTimeoutRef.current);
+        readingBufferTimeoutRef.current = null;
+      }
+      // Start a fresh short reading buffer from now
+      readingBufferTimeoutRef.current = setTimeout(() => {
+        if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
+        setActiveAgent("");
+        setActiveDialogue(null);
+        setIsTyping(false);
+        setTypewriterDone(false);
+        // Re-trigger queue processing for next message
+        setTimeout(() => processQueue(), 400);
+      }, 900);
+    } else {
+      // Second click: skip reading buffer, advance immediately
+      if (readingBufferTimeoutRef.current) {
+        clearTimeout(readingBufferTimeoutRef.current);
+        readingBufferTimeoutRef.current = null;
+      }
+      if (advanceTimeoutRef.current) {
+        clearTimeout(advanceTimeoutRef.current);
+        advanceTimeoutRef.current = null;
+      }
+      setActiveAgent("");
+      setActiveDialogue(null);
+      setIsTyping(false);
+      setTypewriterDone(false);
+      setForceCompleteTypewriter(false);
+      setTimeout(() => processQueue(), 400);
+    }
+  }, [typewriterDone, activeDialogue, isComplete, processQueue]);
 
   const connectWebSocket = useCallback(() => {
     if (!sessionId || !mountedRef.current) return;
@@ -293,6 +357,8 @@ function CourtroomContent() {
         activeDialogue={activeDialogue}
         currentPhase={currentPhase}
         isTyping={isTyping}
+        forceCompleteTypewriter={forceCompleteTypewriter}
+        typewriterDone={typewriterDone}
         scores={scores}
         isComplete={isComplete}
         verdictText={verdictText}
@@ -300,6 +366,7 @@ function CourtroomContent() {
         conflictCount={conflictClusters.length}
         onRequestVerdict={handleShowVerdict}
         onNewCase={handleNewCase}
+        onAdvance={handleAdvance}
         tokenCount={tokenUsage?.total_tokens}
       />
 

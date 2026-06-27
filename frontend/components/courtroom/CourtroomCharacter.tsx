@@ -12,6 +12,8 @@ interface CourtroomCharacterProps {
   pose: Pose;
   isSpeaking: boolean;
   dialogue: string | null;
+  /** Force typewriter to instantly reveal all text (VN skip) */
+  forceComplete?: boolean;
 }
 
 export default function CourtroomCharacter({
@@ -19,6 +21,7 @@ export default function CourtroomCharacter({
   pose,
   isSpeaking,
   dialogue,
+  forceComplete = false,
 }: CourtroomCharacterProps) {
   const theme = AGENTS[agentId];
   const src = spritePath(agentId, pose);
@@ -38,6 +41,11 @@ export default function CourtroomCharacter({
       setVisibleChars(0);
       return;
     }
+    // Force-complete: reveal all text immediately
+    if (forceComplete) {
+      setVisibleChars(dialogue.length);
+      return;
+    }
     setVisibleChars(0);
     intervalRef.current = setInterval(() => {
       setVisibleChars((prev) => {
@@ -51,7 +59,18 @@ export default function CourtroomCharacter({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [dialogue]);
+  }, [dialogue, forceComplete]);
+
+  // If forceComplete flips true while already typing, jump to end
+  useEffect(() => {
+    if (forceComplete && dialogue) {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      setVisibleChars(dialogue.length);
+    }
+  }, [forceComplete, dialogue]);
 
   const displayedText = dialogue ? dialogue.slice(0, visibleChars) : "";
 
