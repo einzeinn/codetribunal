@@ -48,6 +48,10 @@ interface CourtroomStageProps {
   onAdvance?: () => void;
   /** Token usage for display */
   tokenCount?: number;
+  /** Current playback speed multiplier */
+  playbackSpeed?: number;
+  /** Callback to cycle through speed options */
+  onCycleSpeed?: () => void;
 }
 
 /* ─── LEDGER Log Panel ─── */
@@ -316,6 +320,8 @@ export default function CourtroomStage({
   onNewCase,
   onAdvance,
   tokenCount,
+  playbackSpeed = 1,
+  onCycleSpeed,
 }: CourtroomStageProps) {
   const [isLedgerOpen, setIsLedgerOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
@@ -361,9 +367,26 @@ export default function CourtroomStage({
 
       {/* ─── HEADER ─── */}
       <header className="relative z-10 text-center py-3 border-b border-border-default/30 flex-shrink-0">
-        <h1 className="font-[family-name:var(--font-cinzel)] text-[16px] text-gold tracking-[4px]">
-          CODE TRIBUNAL
-        </h1>
+        <div className="flex items-center justify-between px-4">
+          {/* Left: Speed control button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onCycleSpeed?.(); }}
+            className="font-[family-name:var(--font-jetbrains)] text-[11px] text-gold/80 hover:text-gold px-2 py-1 border border-gold/30 hover:border-gold transition-colors"
+          >
+            {playbackSpeed}x
+          </button>
+
+          {/* Center: Title */}
+          <div className="flex-1">
+            <h1 className="font-[family-name:var(--font-cinzel)] text-[16px] text-gold tracking-[4px]">
+              CODE TRIBUNAL
+            </h1>
+          </div>
+
+          {/* Right: spacer for balance */}
+          <div className="w-[40px]" />
+        </div>
+
         {!isComplete && (
           <p className="text-[12px] text-[#4a8a4a] mt-0.5 flex items-center justify-center gap-1.5">
             <span className="inline-block w-2 h-2 bg-[#4a8a4a] rounded-full animate-pulse-live" />

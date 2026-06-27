@@ -7,7 +7,11 @@ import VerdictModal, { type ConflictCluster } from "../../../components/verdict/
 import CourtroomStage from "../../../components/courtroom/CourtroomStage";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-const MESSAGE_DELAY = 800;
+const MESSAGE_DELAY_BASE = 800;
+
+/** Playback speed options */
+const SPEED_OPTIONS = [1, 2, 3] as const;
+type SpeedMultiplier = (typeof SPEED_OPTIONS)[number];
 
 /** Dynamic speaking duration: time for typewriter to finish + reading buffer.
  *  Click-to-advance (VN pattern) lets users skip this, so we keep it tight. */
@@ -57,6 +61,7 @@ function CourtroomContent() {
   const [currentPhase, setCurrentPhase] = useState("investigation");
   const [conflictClusters, setConflictClusters] = useState<ConflictCluster[]>([]);
   const [rubricVerdict, setRubricVerdict] = useState<string | null>(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState<SpeedMultiplier>(1);
 
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<Proceeding[]>([]);
@@ -154,27 +159,27 @@ function CourtroomContent() {
           }
         }
 
-        // Phase 1: typewriter runs at CHAR_SPEED_MS (35ms/char)
-        const typewriterDuration = msg.message.length * 35;
+        // Phase 1: typewriter runs at 35ms/char, divided by speed
+        const typewriterDuration = (msg.message.length * 35) / playbackSpeed;
         typewriterTimeoutRef.current = setTimeout(() => {
           setTypewriterDone(true);
-          // Phase 2: reading buffer
-          const readingDuration = getSpeakingDuration(msg.message) - typewriterDuration;
+          // Phase 2: reading buffer, divided by speed
+          const readingDuration = (getSpeakingDuration(msg.message) - msg.message.length * 35) / playbackSpeed;
           readingBufferTimeoutRef.current = setTimeout(() => {
             advanceTimeoutRef.current = setTimeout(() => {
               setActiveAgent((current) => (current === msg.agent ? "" : current));
               setActiveDialogue((current) => current === msg.message ? null : current);
               setIsTyping(false);
               setTypewriterDone(false);
-              setTimeout(processNext, 400);
-            }, 400);
+              setTimeout(processNext, 400 / playbackSpeed);
+            }, 400 / playbackSpeed);
           }, Math.max(0, readingDuration));
         }, typewriterDuration);
-      }, MESSAGE_DELAY);
+      }, MESSAGE_DELAY_BASE / playbackSpeed);
     };
 
     processNext();
-  }, [applyCompletion]);
+  }, [applyCompletion, playbackSpeed]);
 
   /** VN click-to-advance: 1st click skips typewriter, 2nd click advances to next message */
   const handleAdvance = useCallback(() => {
@@ -202,9 +207,11 @@ function CourtroomContent() {
         setActiveDialogue(null);
         setIsTyping(false);
         setTypewriterDone(false);
+        // Reset processing flag before re-triggering queue
+        isProcessingQueue.current = false;
         // Re-trigger queue processing for next message
-        setTimeout(() => processQueue(), 400);
-      }, 900);
+        setTimeout(() => processQueue(), 400 / playbackSpeed);
+      }, 900 / playbackSpeed);
     } else {
       // Second click: skip reading buffer, advance immediately
       if (readingBufferTimeoutRef.current) {
@@ -220,9 +227,19 @@ function CourtroomContent() {
       setIsTyping(false);
       setTypewriterDone(false);
       setForceCompleteTypewriter(false);
-      setTimeout(() => processQueue(), 400);
+      // Reset processing flag before re-triggering queue
+      isProcessingQueue.current = false;
+      setTimeout(() => processQueue(), 400 / playbackSpeed);
     }
-  }, [typewriterDone, activeDialogue, isComplete, processQueue]);
+  }, [typewriterDone, activeDialogue, isComplete, processQueue, playbackSpeed]);
+
+  /** Cycle through speed options: 1x → 2x → 3x → 1x */
+  const cycleSpeed = useCallback(() => {
+    setPlaybackSpeed((prev) => {
+      const idx = SPEED_OPTIONS.indexOf(prev);
+      return SPEED_OPTIONS[(idx + 1) % SPEED_OPTIONS.length];
+    });
+  }, []);
 
   const connectWebSocket = useCallback(() => {
     if (!sessionId || !mountedRef.current) return;
@@ -369,6 +386,8 @@ function CourtroomContent() {
         onNewCase={handleNewCase}
         onAdvance={handleAdvance}
         tokenCount={tokenUsage?.total_tokens}
+        playbackSpeed={playbackSpeed}
+        onCycleSpeed={cycleSpeed}
       />
 
       {/* Verdict Modal */}
