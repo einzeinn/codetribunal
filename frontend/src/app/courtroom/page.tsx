@@ -7,6 +7,7 @@ import ProceedingsFeed, { type Proceeding } from "../../../components/proceeding
 import QuestLog from "../../../components/ui/QuestLog";
 import ScoreBar from "../../../components/ui/ScoreBar";
 import VerdictModal, { type ConflictCluster } from "../../../components/verdict/VerdictModal";
+import CourtroomStage from "../../../components/courtroom/CourtroomStage";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 const MESSAGE_DELAY = 800;
@@ -65,6 +66,7 @@ function CourtroomContent() {
   const [isConnected, setIsConnected] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const [activeAgent, setActiveAgent] = useState("");
+  const [activeDialogue, setActiveDialogue] = useState<string | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [scores, setScores] = useState({ security: 0, performance: 0, maintainability: 0 });
   const [showVerdict, setShowVerdict] = useState(false);
@@ -106,6 +108,7 @@ function CourtroomContent() {
 
         setProceedings((prev) => [...prev, msg]);
         setActiveAgent(msg.agent);
+        setActiveDialogue(msg.message);
 
         // Track current phase from proceeding metadata
         if (msg.phase && PHASE_ORDER.includes(msg.phase)) {
@@ -114,6 +117,7 @@ function CourtroomContent() {
 
         setTimeout(() => {
           setActiveAgent((current) => (current === msg.agent ? "" : current));
+          setActiveDialogue((current) => current === msg.message ? null : current);
         }, SPEAKING_DURATION);
 
         if (msg.tag === "Final Verdict") {
@@ -267,145 +271,21 @@ function CourtroomContent() {
   };
 
   return (
-    <main className="min-h-screen flex flex-col p-4 gap-3 max-w-full overflow-x-hidden bg-bg-primary">
-      {/* Header — fixed 48px */}
-      <header className="text-center py-3 border-b border-[#2a2a2a] flex-shrink-0">
-        <h1 className="font-[family-name:var(--font-cinzel)] text-[13px] text-gold tracking-[4px]">CODE TRIBUNAL</h1>
-        <p className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-secondary mt-0.5 italic truncate">{caseTitle}</p>
-        {isConnected && !isComplete && (
-          <p className="font-[family-name:var(--font-im-fell)] text-[10px] text-[#4a8a4a] mt-0.5 flex items-center justify-center gap-1">
-            <span className="inline-block w-1.5 h-1.5 bg-[#4a8a4a] rounded-full animate-pulse-live" />
-            Live — {PHASE_LABELS[currentPhase] || currentPhase}
-          </p>
-        )}
-        {/* Phase progress bar */}
-        <div className="mt-2 max-w-[400px] mx-auto">
-          <PhaseProgressBar currentPhase={currentPhase} />
-        </div>
-      </header>
-
-      {/* Agent Bench — 72px */}
-      <div className="flex-shrink-0">
-        <AgentBench agents={getAgentStatuses()} />
-      </div>
-
-      {/* Diamond divider */}
-      <DiamondDivider />
-
-      {/* Courtroom Floor layout */}
-      <div className="flex-1 flex flex-col md:flex-row gap-4 min-h-0 overflow-hidden">
-        {/* Left: Prosecution (AEGIS) + Proceedings feed */}
-        <div className="flex-[7] flex flex-col min-w-0 overflow-hidden">
-          {/* Courtroom floor grid */}
-          <div className="courtroom-floor flex-1 min-h-0">
-            {/* Judge bench (ARBITER) */}
-            <div className="judge-bench border-b border-[#2a2a2a] pb-2 mb-2">
-              <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold tracking-[0.2em] uppercase">
-                ARBITER — Judge
-              </span>
-            </div>
-
-            {/* Prosecution table (AEGIS) */}
-            <div className="prosecution-table border-r border-[#2a2a2a] pr-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-[#8b2020]" />
-                <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-[#8b2020] tracking-[0.15em] uppercase">
-                  AEGIS — Prosecutor
-                </span>
-              </div>
-              <p className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-disabled italic">
-                Security vulnerabilities &amp; accusations
-              </p>
-            </div>
-
-            {/* Defense table (AXIOM) */}
-            <div className="defense-table pl-3">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-[#2a6a2a]" />
-                <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-[#2a6a2a] tracking-[0.15em] uppercase">
-                  AXIOM — Defense
-                </span>
-              </div>
-              <p className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-disabled italic">
-                Validation &amp; counter-evidence
-              </p>
-            </div>
-
-            {/* Exhibit board — proceedings feed spans full width */}
-            <div className="exhibit-board min-h-0 overflow-hidden flex flex-col">
-              <ProceedingsFeed
-                proceedings={proceedings}
-                isTyping={isTyping}
-                isConnected={isConnected}
-                currentPhase={currentPhase}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Quest Log (220px fixed) */}
-        <div className="w-full md:w-[220px] md:flex-shrink-0 flex flex-col">
-          <QuestLog items={questItems} currentObjective={currentObjective} />
-
-          {/* Conflict clusters summary (if any) */}
-          {conflictClusters.length > 0 && (
-            <div className="mt-4 pl-4 border-l border-[#2a2a2a]">
-              <h4 className="font-[family-name:var(--font-cinzel)] text-[8px] text-text-secondary tracking-[0.15em] uppercase mb-2">
-                CONFLICTS ({conflictClusters.length})
-              </h4>
-              {conflictClusters.slice(0, 5).map((c: ConflictCluster, i: number) => (
-                <div key={c.cluster_id || i} className="mb-2 text-[11px]">
-                  <span className="font-[family-name:var(--font-jetbrains)] text-gold text-[9px]">
-                    L{c.line_start}-{c.line_end}
-                  </span>
-                  <span className={`ml-1 ${
-                    c.resolved ? "text-[#2a6a2a]" : "text-[#8b2020]"
-                  }`}>
-                    {c.resolved ? "Resolved" : "Contested"}
-                  </span>
-                  <span className="text-text-disabled ml-1">
-                    ({c.findings?.length || 0} agents)
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Diamond divider */}
-      <DiamondDivider />
-
-      {/* Tribunal Assessment — 80px */}
-      <div className="flex-shrink-0 py-4 border-t border-[#2a2a2a]">
-        <div className="flex items-center gap-2 mb-3">
-          <h3 className="font-[family-name:var(--font-cinzel)] text-[9px] text-text-secondary tracking-[0.2em] uppercase">
-            TRIBUNAL ASSESSMENT
-          </h3>
-          {tokenUsage && (
-            <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-text-disabled ml-auto">
-              {tokenUsage.total_tokens?.toLocaleString()} tokens
-            </span>
-          )}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-          <ScoreBar label="Security" score={scores.security} color="#8b2020" />
-          <ScoreBar label="Performance" score={scores.performance} color="#1a4a7a" />
-          <ScoreBar label="Maintainability" score={scores.maintainability} color="#c9a84c" />
-        </div>
-
-        <div className="flex justify-end">
-          {isComplete ? (
-            <button onClick={handleShowVerdict} className="btn-primary">
-              Request Final Verdict
-            </button>
-          ) : (
-            <span className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-secondary italic">
-              {isConnected ? `Tribunal in session — ${PHASE_LABELS[currentPhase] || currentPhase}...` : "Awaiting connection..."}
-            </span>
-          )}
-        </div>
-      </div>
+    <main className="min-h-screen bg-bg-primary">
+      <CourtroomStage
+        activeSpeaker={activeAgent}
+        activeDialogue={activeDialogue}
+        currentPhase={currentPhase}
+        isTyping={isTyping}
+        scores={scores}
+        isComplete={isComplete}
+        verdictText={verdictText}
+        rubricVerdict={rubricVerdict}
+        conflictCount={conflictClusters.length}
+        onRequestVerdict={handleShowVerdict}
+        onNewCase={handleNewCase}
+        tokenCount={tokenUsage?.total_tokens}
+      />
 
       {/* Verdict Modal */}
       <VerdictModal

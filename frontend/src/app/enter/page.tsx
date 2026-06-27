@@ -1,18 +1,20 @@
 import Link from "next/link";
-import GuardCharacter from "../../../components/svg/GuardCharacter";
 
 export default function EnterPage() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4 md:px-8 bg-bg-primary">
       <div className="max-w-4xl w-full flex flex-col md:flex-row items-center gap-8 md:gap-16">
-        {/* Guard — Left 40% */}
-        <div className="flex-shrink-0">
-          <GuardCharacter />
+        {/* Sword — Left side */}
+        <div className="flex-shrink-0 text-text-primary" style={{ color: "var(--text-primary)" }}>
+          <img
+            src="/vectors/inquisitor-sword.svg"
+            alt="Inquisitor Sword"
+            className="w-32 h-auto md:w-40"
+          />
         </div>
 
         {/* Dialogue — Right 60% */}
         <div className="flex-1 max-w-[360px]">
-          {/* Speech bubble with left gold accent */}
           <div className="bg-bg-surface border border-default border-l-gold border-l p-6 md:p-8">
             <h2 className="font-[family-name:var(--font-cinzel)] text-[10px] text-gold tracking-[0.2em] uppercase mb-4">
               Guard of the Tribunal
