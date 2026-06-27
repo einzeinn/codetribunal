@@ -7,7 +7,6 @@ import VerdictModal, { type ConflictCluster } from "../../../components/verdict/
 import CourtroomStage from "../../../components/courtroom/CourtroomStage";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
-const MESSAGE_DELAY_BASE = 800;
 
 /** Playback speed options */
 const SPEED_OPTIONS = [1, 2, 3] as const;
@@ -15,10 +14,11 @@ type SpeedMultiplier = (typeof SPEED_OPTIONS)[number];
 
 /** Dynamic speaking duration: time for typewriter to finish + reading buffer.
  *  Click-to-advance (VN pattern) lets users skip this, so we keep it tight. */
-function getSpeakingDuration(text: string): number {
+function getSpeakingDuration(text: string, speed: number = 1): number {
   const charCount = text.length;
-  // 40ms per char typewriter + 900ms reading buffer, floor 2.2s for short messages
-  return Math.max(2200, charCount * 40 + 900);
+  // Base: 40ms per char typewriter + 1200ms reading buffer, floor 1.8s
+  // Then divide entire thing by speed so higher speed = much shorter total
+  return Math.max(1800 / speed, (charCount * 40 + 1200) / speed);
 }
 
 const AGENT_ROLES: Record<string, string> = {
@@ -167,22 +167,24 @@ function CourtroomContent() {
         }
 
         // Phase 1: typewriter runs at 35ms/char, divided by speed
-        const typewriterDuration = (msg.message.length * 35) / speedRef.current;
+        const speed = speedRef.current;
+        const typewriterDuration = (msg.message.length * 35) / speed;
         typewriterTimeoutRef.current = setTimeout(() => {
           setTypewriterDone(true);
-          // Phase 2: reading buffer, divided by speed
-          const readingDuration = (getSpeakingDuration(msg.message) - msg.message.length * 35) / speedRef.current;
+          // Phase 2: reading buffer = total speaking time minus typewriter time
+          const totalDuration = getSpeakingDuration(msg.message, speed);
+          const readingDuration = Math.max(0, totalDuration - typewriterDuration);
           readingBufferTimeoutRef.current = setTimeout(() => {
             advanceTimeoutRef.current = setTimeout(() => {
               setActiveAgent((current) => (current === msg.agent ? "" : current));
               setActiveDialogue((current) => current === msg.message ? null : current);
               setIsTyping(false);
               setTypewriterDone(false);
-              setTimeout(processNext, 400 / speedRef.current);
-            }, 400 / speedRef.current);
-          }, Math.max(0, readingDuration));
+              setTimeout(processNext, 300 / speedRef.current);
+            }, 300 / speedRef.current);
+          }, readingDuration);
         }, typewriterDuration);
-      }, MESSAGE_DELAY_BASE / speedRef.current);
+      }, 600 / speedRef.current);
     };
 
     processNext();
@@ -207,7 +209,7 @@ function CourtroomContent() {
         clearTimeout(readingBufferTimeoutRef.current);
         readingBufferTimeoutRef.current = null;
       }
-      // Start a fresh short reading buffer from now
+      // Start a reading buffer so user can actually read the revealed text
       readingBufferTimeoutRef.current = setTimeout(() => {
         if (advanceTimeoutRef.current) clearTimeout(advanceTimeoutRef.current);
         setActiveAgent("");
@@ -217,8 +219,8 @@ function CourtroomContent() {
         // Reset processing flag before re-triggering queue
         isProcessingQueue.current = false;
         // Re-trigger queue processing for next message
-        setTimeout(() => processQueue(), 400 / speedRef.current);
-      }, 900 / speedRef.current);
+        setTimeout(() => processQueue(), 300 / speedRef.current);
+      }, 1500); // 1.5s reading time after skip — enough to read, not speed-scaled
     } else {
       // Second click: skip reading buffer, advance immediately
       if (readingBufferTimeoutRef.current) {
@@ -236,7 +238,7 @@ function CourtroomContent() {
       setForceCompleteTypewriter(false);
       // Reset processing flag before re-triggering queue
       isProcessingQueue.current = false;
-      setTimeout(() => processQueue(), 400 / speedRef.current);
+      setTimeout(() => processQueue(), 300 / speedRef.current);
     }
   }, [typewriterDone, activeDialogue, isComplete, processQueue]);
 
