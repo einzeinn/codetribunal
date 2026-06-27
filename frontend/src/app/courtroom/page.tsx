@@ -8,7 +8,13 @@ import CourtroomStage from "../../../components/courtroom/CourtroomStage";
 
 const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 const MESSAGE_DELAY = 800;
-const SPEAKING_DURATION = 2000;
+
+/** Dynamic speaking duration: time for typewriter to finish + reading buffer */
+function getSpeakingDuration(text: string): number {
+  const charCount = text.length;
+  // 35ms per char (typewriter speed) + 2500ms reading buffer, min 5s
+  return Math.max(5000, charCount * 40 + 2500);
+}
 
 const AGENT_ROLES: Record<string, string> = {
   LEDGER: "Clerk",
@@ -89,11 +95,6 @@ function CourtroomContent() {
           setCurrentPhase(msg.phase);
         }
 
-        setTimeout(() => {
-          setActiveAgent((current) => (current === msg.agent ? "" : current));
-          setActiveDialogue((current) => current === msg.message ? null : current);
-        }, SPEAKING_DURATION);
-
         if (msg.tag === "Final Verdict") {
           // Use deterministic rubric_scores from backend — NOT LLM text parsing
           setVerdictText(msg.message);
@@ -107,8 +108,16 @@ function CourtroomContent() {
           }
         }
 
-        setIsTyping(false);
-        setTimeout(processNext, 100);
+        // Wait for typewriter to finish + reading buffer before next message
+        const displayDuration = getSpeakingDuration(msg.message);
+
+        setTimeout(() => {
+          setActiveAgent((current) => (current === msg.agent ? "" : current));
+          setActiveDialogue((current) => current === msg.message ? null : current);
+          setIsTyping(false);
+          // Process next message after a brief pause
+          setTimeout(processNext, 400);
+        }, displayDuration);
       }, MESSAGE_DELAY);
     };
 

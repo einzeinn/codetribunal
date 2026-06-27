@@ -4,7 +4,7 @@
  */
 
 export type AgentId = "aegis" | "axiom" | "metric" | "arbiter" | "ledger";
-export type Pose = "neutral" | "active";
+export type Pose = "neutral" | "active" | "writing" | "ruling";
 
 export interface AgentTheme {
   id: AgentId;
@@ -60,9 +60,11 @@ export function toAgentId(name: string): AgentId {
     : "ledger";
 }
 
-/** Sprite path helper */
+/** Sprite path helper — maps agent + pose to the correct PNG file */
 export function spritePath(agentId: AgentId, pose: Pose): string {
   // ARBITER uses "ruling" instead of "active"
-  const file = agentId === "arbiter" && pose === "active" ? "ruling" : pose;
-  return `/characters/${agentId}/${file}.png`;
+  if (agentId === "arbiter" && (pose === "active" || pose === "ruling")) return `/characters/arbiter/ruling.png`;
+  // LEDGER uses "writing" instead of "active"
+  if (agentId === "ledger" && (pose === "active" || pose === "writing")) return `/characters/ledger/writing.png`;
+  return `/characters/${agentId}/${pose}.png`;
 }

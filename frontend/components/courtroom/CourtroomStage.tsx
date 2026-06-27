@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import CourtroomCharacter from "./CourtroomCharacter";
-import { AGENTS, toAgentId, type AgentId } from "../../lib/courtroom-theme";
+import { AGENTS, toAgentId, spritePath, type AgentId } from "../../lib/courtroom-theme";
 
 /* ─── Types ─── */
 
@@ -57,7 +58,7 @@ function LedgerToast({ entry, onDone }: { entry: LedgerEntry; onDone: () => void
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.25 }}
     >
-      <div className="bg-bg-surface border border-gold/30 px-4 py-2 text-[11px] text-gold font-[family-name:var(--font-cinzel)] tracking-[0.1em]">
+      <div className="bg-bg-surface border border-gold/30 px-4 py-2.5 text-[13px] text-gold font-[family-name:var(--font-cinzel)] tracking-[0.1em]">
         LEDGER: {entry.text}
       </div>
     </motion.div>
@@ -96,7 +97,7 @@ function LedgerPanel({
             transition={{ type: "tween", duration: 0.3 }}
           >
             <div className="p-4 border-b border-border-default flex items-center justify-between">
-              <span className="font-[family-name:var(--font-cinzel)] text-[10px] text-gold tracking-[0.2em] uppercase">
+              <span className="font-[family-name:var(--font-cinzel)] text-[12px] text-gold tracking-[0.2em] uppercase">
                 LEDGER — Session Log
               </span>
               <button onClick={onClose} className="text-text-secondary hover:text-text-primary text-sm">
@@ -105,17 +106,17 @@ function LedgerPanel({
             </div>
             <div className="p-4 overflow-y-auto max-h-[calc(100vh-60px)]">
               {entries.length === 0 ? (
-                <p className="text-[12px] text-text-disabled italic font-[family-name:var(--font-im-fell)]">
+                <p className="text-[14px] text-text-disabled italic">
                   No entries recorded yet.
                 </p>
               ) : (
                 <div className="space-y-3">
                   {[...entries].reverse().map((e) => (
                     <div key={e.id} className="border-b border-border-default/50 pb-2">
-                      <p className="text-[11px] text-text-primary font-[family-name:var(--font-im-fell)]">
+                      <p className="text-[13px] text-text-primary leading-[1.6]">
                         {e.text}
                       </p>
-                      <span className="text-[9px] text-text-disabled font-[family-name:var(--font-jetbrains)]">
+                      <span className="text-[11px] text-text-disabled font-[family-name:var(--font-jetbrains)]">
                         {e.timestamp}
                       </span>
                     </div>
@@ -178,8 +179,8 @@ function ArbiterOverlay({
         tabIndex={-1}
       />
 
-      {/* ARBITER character centered */}
-      <div className="relative z-10 w-[200px] md:w-[260px]">
+      {/* ARBITER character centered — large and prominent */}
+      <div className="relative z-10 w-[320px] md:w-[440px]">
         <CourtroomCharacter
           agentId="arbiter"
           pose="active"
@@ -269,12 +270,12 @@ export default function CourtroomStage({
 
       {/* ─── HEADER ─── */}
       <header className="relative z-10 text-center py-3 border-b border-border-default/30 flex-shrink-0">
-        <h1 className="font-[family-name:var(--font-cinzel)] text-[13px] text-gold tracking-[4px]">
+        <h1 className="font-[family-name:var(--font-cinzel)] text-[16px] text-gold tracking-[4px]">
           CODE TRIBUNAL
         </h1>
         {!isComplete && (
-          <p className="font-[family-name:var(--font-im-fell)] text-[10px] text-[#4a8a4a] mt-0.5 flex items-center justify-center gap-1">
-            <span className="inline-block w-1.5 h-1.5 bg-[#4a8a4a] rounded-full animate-pulse-live" />
+          <p className="text-[12px] text-[#4a8a4a] mt-0.5 flex items-center justify-center gap-1.5">
+            <span className="inline-block w-2 h-2 bg-[#4a8a4a] rounded-full animate-pulse-live" />
             Live
           </p>
         )}
@@ -298,7 +299,7 @@ export default function CourtroomStage({
                   scale: state.isSpeaking ? 1.03 : 1,
                   opacity: isArbiterActive ? 0.3 : 1,
                 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
                 style={{
                   borderColor: state.isSpeaking ? theme.accent : "transparent",
                   borderWidth: 1,
@@ -317,12 +318,12 @@ export default function CourtroomStage({
                   }}
                 >
                   <span
-                    className="font-[family-name:var(--font-cinzel)] text-[8px] tracking-[0.15em] uppercase"
+                    className="font-[family-name:var(--font-cinzel)] text-[10px] tracking-[0.15em] uppercase"
                     style={{ color: theme.accent }}
                   >
                     {theme.name}
                   </span>
-                  <span className="text-[7px] text-text-disabled ml-1">
+                  <span className="text-[9px] text-text-disabled ml-1">
                     {theme.role}
                   </span>
                 </div>
@@ -352,7 +353,7 @@ export default function CourtroomStage({
                 <span className="typing-dot" />
                 <span className="typing-dot" />
               </div>
-              <span className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-secondary italic">
+              <span className="text-[13px] text-text-secondary">
                 Agent is addressing the court...
               </span>
             </motion.div>
@@ -370,11 +371,11 @@ export default function CourtroomStage({
       {/* ─── BOTTOM: Assessment + Controls ─── */}
       <div className="relative z-10 flex-shrink-0 border-t border-border-default/30 p-3">
         <div className="flex items-center gap-3 mb-2">
-          <h3 className="font-[family-name:var(--font-cinzel)] text-[9px] text-text-secondary tracking-[0.2em] uppercase">
+          <h3 className="font-[family-name:var(--font-cinzel)] text-[11px] text-text-secondary tracking-[0.2em] uppercase">
             TRIBUNAL ASSESSMENT
           </h3>
           {tokenCount != null && (
-            <span className="font-[family-name:var(--font-jetbrains)] text-[9px] text-text-disabled ml-auto">
+            <span className="font-[family-name:var(--font-jetbrains)] text-[11px] text-text-disabled ml-auto">
               {tokenCount.toLocaleString()} tokens
             </span>
           )}
@@ -389,11 +390,11 @@ export default function CourtroomStage({
           ] as const).map(({ label, score, color }) => (
             <div key={label}>
               <div className="flex items-center justify-between mb-0.5">
-                <span className="font-[family-name:var(--font-cinzel)] text-[8px] text-text-secondary tracking-[0.1em]">
+                <span className="font-[family-name:var(--font-cinzel)] text-[10px] text-text-secondary tracking-[0.1em]">
                   {label}
                 </span>
                 <span
-                  className="font-[family-name:var(--font-jetbrains)] text-[10px]"
+                  className="font-[family-name:var(--font-jetbrains)] text-[12px]"
                   style={{ color }}
                 >
                   {score}/10
@@ -417,7 +418,7 @@ export default function CourtroomStage({
           <div className="mb-2 px-3 py-1.5 border border-border-default/40 bg-bg-raised/60 flex items-center gap-3">
             {rubricVerdict && (
               <span
-                className="font-[family-name:var(--font-cinzel)] text-[9px] tracking-[0.2em] uppercase px-2 py-0.5 border"
+                className="font-[family-name:var(--font-cinzel)] text-[11px] tracking-[0.2em] uppercase px-2 py-0.5 border"
                 style={{
                   color: rubricVerdict === "APPROVED" ? "#c9a84c" : rubricVerdict === "REJECTED" ? "#8b2020" : "#888",
                   borderColor: rubricVerdict === "APPROVED" ? "#c9a84c55" : rubricVerdict === "REJECTED" ? "#8b202055" : "#55555555",
@@ -427,7 +428,7 @@ export default function CourtroomStage({
               </span>
             )}
             {verdictText && (
-              <span className="font-[family-name:var(--font-im-fell)] text-[10px] text-text-secondary truncate">
+              <span className="text-[12px] text-text-secondary truncate">
                 {verdictText.length > 80 ? verdictText.slice(0, 80) + "…" : verdictText}
               </span>
             )}
@@ -438,7 +439,7 @@ export default function CourtroomStage({
         <div className="flex items-center justify-between">
           {/* Conflict count */}
           {conflictCount > 0 && (
-            <span className="font-[family-name:var(--font-cinzel)] text-[8px] text-text-disabled tracking-[0.1em]">
+            <span className="font-[family-name:var(--font-cinzel)] text-[10px] text-text-disabled tracking-[0.1em]">
               CONFLICTS: {conflictCount}
             </span>
           )}
@@ -454,7 +455,7 @@ export default function CourtroomStage({
                 </button>
               </>
             ) : (
-              <span className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-secondary italic">
+              <span className="text-[13px] text-text-secondary">
                 Tribunal in session...
               </span>
             )}
@@ -462,20 +463,37 @@ export default function CourtroomStage({
         </div>
       </div>
 
-      {/* ─── LEDGER badge (persistent, bottom-right) ─── */}
-      {ledgerEntries.length > 0 && (
-        <button
-          onClick={() => setIsLedgerOpen(true)}
-          className="fixed bottom-4 right-4 z-40 flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-surface border border-border-default hover:border-gold/30 transition-colors"
-        >
-          <span className="font-[family-name:var(--font-cinzel)] text-[8px] text-gold tracking-[0.15em]">
-            LEDGER
-          </span>
-          <span className="font-[family-name:var(--font-jetbrains)] text-[9px] text-text-secondary bg-bg-raised px-1.5 py-0.5">
-            {ledgerEntries.length}
-          </span>
-        </button>
-      )}
+      {/* ─── LEDGER character (persistent, bottom-right) ─── */}
+      <button
+        onClick={() => setIsLedgerOpen(true)}
+        className="fixed bottom-2 right-2 z-40 flex flex-col items-center group"
+      >
+        {/* LEDGER sprite */}
+        <Image
+          src={spritePath("ledger", ledgerEntries.length > 0 ? "writing" : "neutral")}
+          alt="LEDGER — Clerk"
+          width={90}
+          height={135}
+          className="w-[70px] md:w-[90px] h-auto select-none transition-all duration-300 group-hover:scale-105"
+          style={{
+            filter: ledgerEntries.length > 0
+              ? `drop-shadow(0 0 8px ${AGENTS.ledger.accent})`
+              : "drop-shadow(0 0 3px rgba(0,0,0,0.5))",
+          }}
+          draggable={false}
+        />
+        {/* Entry count badge overlaid on sprite */}
+        {ledgerEntries.length > 0 && (
+          <div className="flex items-center gap-1 px-2 py-0.5 bg-bg-surface/90 border border-border-default group-hover:border-gold/30 transition-colors">
+            <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold tracking-[0.15em]">
+              LOG
+            </span>
+            <span className="font-[family-name:var(--font-jetbrains)] text-[10px] text-text-secondary bg-bg-raised px-1.5 py-0.5">
+              {ledgerEntries.length}
+            </span>
+          </div>
+        )}
+      </button>
 
       {/* LEDGER toast */}
       <AnimatePresence>
