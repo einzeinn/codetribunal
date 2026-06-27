@@ -62,6 +62,13 @@ function CourtroomContent() {
   const [conflictClusters, setConflictClusters] = useState<ConflictCluster[]>([]);
   const [rubricVerdict, setRubricVerdict] = useState<string | null>(null);
   const [playbackSpeed, setPlaybackSpeed] = useState<SpeedMultiplier>(1);
+  // Ref mirror so speed changes don't cascade through callback deps
+  const speedRef = useRef<SpeedMultiplier>(playbackSpeed);
+
+  // Keep speed ref in sync with state
+  useEffect(() => {
+    speedRef.current = playbackSpeed;
+  }, [playbackSpeed]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const messageQueueRef = useRef<Proceeding[]>([]);
@@ -160,26 +167,26 @@ function CourtroomContent() {
         }
 
         // Phase 1: typewriter runs at 35ms/char, divided by speed
-        const typewriterDuration = (msg.message.length * 35) / playbackSpeed;
+        const typewriterDuration = (msg.message.length * 35) / speedRef.current;
         typewriterTimeoutRef.current = setTimeout(() => {
           setTypewriterDone(true);
           // Phase 2: reading buffer, divided by speed
-          const readingDuration = (getSpeakingDuration(msg.message) - msg.message.length * 35) / playbackSpeed;
+          const readingDuration = (getSpeakingDuration(msg.message) - msg.message.length * 35) / speedRef.current;
           readingBufferTimeoutRef.current = setTimeout(() => {
             advanceTimeoutRef.current = setTimeout(() => {
               setActiveAgent((current) => (current === msg.agent ? "" : current));
               setActiveDialogue((current) => current === msg.message ? null : current);
               setIsTyping(false);
               setTypewriterDone(false);
-              setTimeout(processNext, 400 / playbackSpeed);
-            }, 400 / playbackSpeed);
+              setTimeout(processNext, 400 / speedRef.current);
+            }, 400 / speedRef.current);
           }, Math.max(0, readingDuration));
         }, typewriterDuration);
-      }, MESSAGE_DELAY_BASE / playbackSpeed);
+      }, MESSAGE_DELAY_BASE / speedRef.current);
     };
 
     processNext();
-  }, [applyCompletion, playbackSpeed]);
+  }, [applyCompletion]);
 
   /** VN click-to-advance: 1st click skips typewriter, 2nd click advances to next message */
   const handleAdvance = useCallback(() => {
@@ -210,8 +217,8 @@ function CourtroomContent() {
         // Reset processing flag before re-triggering queue
         isProcessingQueue.current = false;
         // Re-trigger queue processing for next message
-        setTimeout(() => processQueue(), 400 / playbackSpeed);
-      }, 900 / playbackSpeed);
+        setTimeout(() => processQueue(), 400 / speedRef.current);
+      }, 900 / speedRef.current);
     } else {
       // Second click: skip reading buffer, advance immediately
       if (readingBufferTimeoutRef.current) {
@@ -229,9 +236,9 @@ function CourtroomContent() {
       setForceCompleteTypewriter(false);
       // Reset processing flag before re-triggering queue
       isProcessingQueue.current = false;
-      setTimeout(() => processQueue(), 400 / playbackSpeed);
+      setTimeout(() => processQueue(), 400 / speedRef.current);
     }
-  }, [typewriterDone, activeDialogue, isComplete, processQueue, playbackSpeed]);
+  }, [typewriterDone, activeDialogue, isComplete, processQueue]);
 
   /** Cycle through speed options: 1x → 2x → 3x → 1x */
   const cycleSpeed = useCallback(() => {
