@@ -579,7 +579,7 @@ export default function CourtroomStage({
           )}
 
           <div className="flex items-center gap-2 ml-auto">
-            {isComplete ? (
+            {isComplete || verdictText || rubricVerdict ? (
               <>
                 <button
                   onClick={(e) => { e.stopPropagation(); setIsReviewOpen(true); }}
