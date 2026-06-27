@@ -359,6 +359,7 @@ function CourtroomContent() {
         isTyping={isTyping}
         forceCompleteTypewriter={forceCompleteTypewriter}
         typewriterDone={typewriterDone}
+        proceedings={proceedings}
         scores={scores}
         isComplete={isComplete}
         verdictText={verdictText}

@@ -28,7 +28,7 @@ export default function HeroPage() {
         </div>
 
         {/* CTA — 32px below subtitle */}
-        <Link href="/enter" className="btn-primary mt-8">
+        <Link href="/file" className="btn-primary mt-8">
           Approach the Gates
         </Link>
       </div>

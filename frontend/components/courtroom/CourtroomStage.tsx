@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import CourtroomCharacter from "./CourtroomCharacter";
 import { AGENTS, toAgentId, spritePath, type AgentId } from "../../lib/courtroom-theme";
+import { type Proceeding } from "../proceedings/ProceedingsFeed";
 
 /* ─── Types ─── */
 
@@ -27,6 +28,8 @@ interface CourtroomStageProps {
   forceCompleteTypewriter?: boolean;
   /** Whether typewriter has finished for the current message */
   typewriterDone?: boolean;
+  /** All proceedings for replay after verdict */
+  proceedings?: Proceeding[];
   /** Rubric scores */
   scores: { security: number; performance: number; maintainability: number };
   /** Whether the trial is complete */
@@ -45,30 +48,6 @@ interface CourtroomStageProps {
   onAdvance?: () => void;
   /** Token usage for display */
   tokenCount?: number;
-}
-
-/* ─── LEDGER Toast ─── */
-
-function LedgerToast({ entry, onDone }: { entry: LedgerEntry; onDone: () => void }) {
-  useEffect(() => {
-    const t = setTimeout(onDone, 1800);
-    return () => clearTimeout(t);
-  }, [onDone]);
-
-  return (
-    <motion.div
-      className="fixed bottom-6 left-1/2 z-50"
-      style={{ x: "-50%" }}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -10 }}
-      transition={{ duration: 0.25 }}
-    >
-      <div className="bg-bg-surface border border-gold/30 px-4 py-2.5 text-[13px] text-gold font-[family-name:var(--font-cinzel)] tracking-[0.1em]">
-        LEDGER: {entry.text}
-      </div>
-    </motion.div>
-  );
 }
 
 /* ─── LEDGER Log Panel ─── */
@@ -128,6 +107,130 @@ function LedgerPanel({
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ─── Proceedings Replay Panel ─── */
+
+function ProceedingsReplayPanel({
+  isOpen,
+  onClose,
+  proceedings,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  proceedings: Proceeding[];
+}) {
+  const agentColors: Record<string, string> = {
+    LEDGER: AGENTS.ledger.accent,
+    AEGIS: AGENTS.aegis.accent,
+    AXIOM: AGENTS.axiom.accent,
+    METRIC: AGENTS.metric.accent,
+    ARBITER: AGENTS.arbiter.accent,
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            className="fixed inset-0 z-40 bg-black/70"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={(e) => { e.stopPropagation(); onClose(); }}
+          />
+          {/* Panel */}
+          <motion.div
+            className="fixed top-0 left-0 bottom-0 z-50 w-full md:w-[680px] bg-bg-surface border-r border-border-default overflow-hidden flex flex-col"
+            initial={{ x: "-100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "-100%" }}
+            transition={{ type: "tween", duration: 0.3 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 border-b border-border-default flex items-center justify-between flex-shrink-0">
+              <span className="font-[family-name:var(--font-cinzel)] text-[14px] text-gold tracking-[0.2em] uppercase">
+                Trial Proceedings
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onClose(); }}
+                className="text-text-secondary hover:text-text-primary text-lg px-2"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Scrollable content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {proceedings.length === 0 ? (
+                <p className="text-[14px] text-text-disabled italic text-center py-8">
+                  No proceedings recorded.
+                </p>
+              ) : (
+                proceedings.map((p, i) => (
+                  <div
+                    key={`${p.agent}-${p.round_number}-${i}`}
+                    className="border border-border-default/50 p-3"
+                    style={{
+                      background: "linear-gradient(180deg, rgba(8,8,10,0.6), rgba(8,8,10,0.8))",
+                    }}
+                  >
+                    {/* Header row */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className="font-[family-name:var(--font-cinzel)] text-[11px] tracking-[0.15em] uppercase px-2 py-0.5 border"
+                        style={{
+                          color: agentColors[p.agent] || "#888",
+                          borderColor: `${agentColors[p.agent] || "#555"}55`,
+                        }}
+                      >
+                        {p.agent}
+                      </span>
+                      {p.tag && (
+                        <span className="text-[10px] text-text-disabled">{p.tag}</span>
+                      )}
+                      {p.phase && (
+                        <span className="text-[10px] text-text-disabled ml-auto">
+                          {p.phase.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Message content */}
+                    <p
+                      className="text-[13px] leading-[1.7] whitespace-pre-wrap"
+                      style={{ color: "#e8e5dc" }}
+                    >
+                      {p.message}
+                    </p>
+
+                    {/* Findings if any */}
+                    {p.findings && p.findings.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border-default/30">
+                        <span className="text-[9px] text-gold/70 tracking-[0.1em] uppercase">
+                          Findings ({p.findings.length})
+                        </span>
+                        <div className="mt-1 space-y-1">
+                          {p.findings.map((f) => (
+                            <div key={f.finding_id} className="text-[11px] text-text-secondary pl-2 border-l border-border-default/30">
+                              <span className="text-text-disabled">{f.finding_id}:</span> {f.claim.slice(0, 100)}
+                              {f.claim.length > 100 && "…"}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </div>
           </motion.div>
@@ -203,6 +306,7 @@ export default function CourtroomStage({
   isTyping,
   forceCompleteTypewriter = false,
   typewriterDone = false,
+  proceedings = [],
   scores,
   isComplete,
   verdictText,
@@ -213,35 +317,13 @@ export default function CourtroomStage({
   onAdvance,
   tokenCount,
 }: CourtroomStageProps) {
-  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [isLedgerOpen, setIsLedgerOpen] = useState(false);
-  const [currentToast, setCurrentToast] = useState<LedgerEntry | null>(null);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
 
   // Track significant events for LEDGER
-  const addLedgerEntry = useCallback((text: string) => {
-    const entry: LedgerEntry = {
-      id: `ledger-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      text,
-      timestamp: new Date().toLocaleTimeString(),
-    };
-    setLedgerEntries((prev) => [...prev, entry]);
-    setCurrentToast(entry);
-  }, []);
-
-  // Auto-trigger LEDGER entries on phase transitions
-  const prevPhase = useRef(currentPhase);
-  useEffect(() => {
-    if (currentPhase !== prevPhase.current) {
-      prevPhase.current = currentPhase;
-      if (currentPhase === "cross_examination") {
-        addLedgerEntry("Cross-examination commenced");
-      } else if (currentPhase === "verdict") {
-        addLedgerEntry("ARBITER is delivering the verdict");
-      } else if (currentPhase === "complete") {
-        addLedgerEntry("Session complete — verdict rendered");
-      }
-    }
-  }, [currentPhase, addLedgerEntry]);
+  // Session tracking for LEDGER (simple count, no detailed entries)
+  const [sessionCount] = useState(1);
+  const sessionStartTime = useRef(new Date().toLocaleTimeString());
 
   // Determine active speaker agent id
   const speakerId: AgentId | null = activeSpeaker
@@ -476,6 +558,12 @@ export default function CourtroomStage({
           <div className="flex items-center gap-2 ml-auto">
             {isComplete ? (
               <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setIsReviewOpen(true); }}
+                  className="btn-ghost text-[10px]"
+                >
+                  Review Proceedings
+                </button>
                 <button onClick={onRequestVerdict} className="btn-primary text-[10px]">
                   Request Final Verdict
                 </button>
@@ -492,7 +580,7 @@ export default function CourtroomStage({
         </div>
       </div>
 
-      {/* ─── LEDGER character + dialogue (persistent, bottom-right) ─── */}
+      {/* ─── LEDGER character (persistent, bottom-right) ─── */}
       <div className="fixed bottom-2 right-2 z-40 flex items-end gap-2 group">
         {/* Dialogue text box to the LEFT of the sprite */}
         {activeSpeaker && toAgentId(activeSpeaker) === "ledger" && activeDialogue && (
@@ -529,53 +617,52 @@ export default function CourtroomStage({
           </motion.div>
         )}
 
-        {/* LEDGER sprite (click opens log panel) */}
+        {/* LEDGER sprite (click opens session info panel) */}
         <button
-          onClick={() => setIsLedgerOpen(true)}
+          onClick={(e) => { e.stopPropagation(); setIsLedgerOpen(true); }}
           className="flex flex-col items-center group/sprite"
         >
           <Image
-            src={spritePath("ledger", ledgerEntries.length > 0 ? "writing" : "neutral")}
+            src={spritePath("ledger", isComplete ? "writing" : "neutral")}
             alt="LEDGER — Clerk"
             width={90}
             height={135}
             className="w-[70px] md:w-[90px] h-auto select-none transition-all duration-300 group-hover/sprite:scale-105"
             style={{
-              filter: ledgerEntries.length > 0
-                ? `drop-shadow(0 0 8px ${AGENTS.ledger.accent})`
-                : "drop-shadow(0 0 3px rgba(0,0,0,0.5))",
+              filter: `drop-shadow(0 0 ${isComplete ? "8px " + AGENTS.ledger.accent : "3px rgba(0,0,0,0.5)"})`,
             }}
             draggable={false}
           />
-          {/* Entry count badge */}
-          {ledgerEntries.length > 0 && (
-            <div className="flex items-center gap-1 px-2 py-0.5 bg-bg-surface/90 border border-border-default group-hover/sprite:border-gold/30 transition-colors">
-              <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold tracking-[0.15em]">
-                LOG
-              </span>
-              <span className="font-[family-name:var(--font-jetbrains)] text-[10px] text-text-secondary bg-bg-raised px-1.5 py-0.5">
-                {ledgerEntries.length}
-              </span>
-            </div>
-          )}
+          {/* Session count badge */}
+          <div className="flex items-center gap-1 px-2 py-0.5 bg-bg-surface/90 border border-border-default group-hover/sprite:border-gold/30 transition-colors">
+            <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold tracking-[0.15em]">
+              SESSION
+            </span>
+            <span className="font-[family-name:var(--font-jetbrains)] text-[10px] text-text-secondary bg-bg-raised px-1.5 py-0.5">
+              {sessionCount}
+            </span>
+          </div>
         </button>
       </div>
 
-      {/* LEDGER toast */}
-      <AnimatePresence>
-        {currentToast && (
-          <LedgerToast
-            entry={currentToast}
-            onDone={() => setCurrentToast(null)}
-          />
-        )}
-      </AnimatePresence>
-
-      {/* LEDGER slide-in panel */}
+      {/* LEDGER slide-in panel (simplified — shows session info only) */}
       <LedgerPanel
         isOpen={isLedgerOpen}
         onClose={() => setIsLedgerOpen(false)}
-        entries={ledgerEntries}
+        entries={[
+          {
+            id: "session-1",
+            text: `Session ${sessionCount} — started at ${sessionStartTime.current}`,
+            timestamp: sessionStartTime.current,
+          },
+        ]}
+      />
+
+      {/* Proceedings Replay Panel */}
+      <ProceedingsReplayPanel
+        isOpen={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
+        proceedings={proceedings}
       />
     </div>
   );
