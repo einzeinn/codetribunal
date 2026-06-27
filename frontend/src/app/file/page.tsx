@@ -2,6 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import CourtroomAtmosphere from "../../../components/ui/CourtroomAtmosphere";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -95,10 +97,28 @@ export default function FilePage() {
   const lineCount = codeContent ? codeContent.split("\n").length : 0;
 
   return (
-    <main className="min-h-screen flex items-center justify-center px-4 py-12 bg-bg-primary">
-      <div className="w-full max-w-[480px]">
+    <main className="min-h-screen flex items-center justify-center px-4 py-12 relative overflow-hidden bg-bg-primary">
+      {/* Atmosphere layer — behind the card */}
+      <CourtroomAtmosphere />
+
+      <div className="relative z-10 w-full max-w-[480px]">
+        {/* Case number kicker */}
+        <div className="flex items-center justify-center gap-3 mb-2 opacity-80">
+          <div className="w-6 h-px bg-[#6b5a30]" />
+          <span className="text-[9px] text-[#7a6a45] tracking-[0.3em] font-[family-name:var(--font-cinzel)]">
+            CASE No. 0001
+          </span>
+          <div className="w-6 h-px bg-[#6b5a30]" />
+        </div>
+
         {/* Card with gold top accent */}
-        <div className="card-accent p-10 md:p-12">
+        <div className="card-accent p-10 md:p-12 relative">
+          {/* Corner bracket decorations */}
+          <div className="absolute -top-px -left-px w-3.5 h-3.5 border-t border-l" style={{ borderColor: "var(--gold)" }} />
+          <div className="absolute -top-px -right-px w-3.5 h-3.5 border-t border-r" style={{ borderColor: "var(--gold)" }} />
+          <div className="absolute -bottom-px -left-px w-3.5 h-3.5 border-b border-l" style={{ borderColor: "var(--gold)" }} />
+          <div className="absolute -bottom-px -right-px w-3.5 h-3.5 border-b border-r" style={{ borderColor: "var(--gold)" }} />
+
           {/* Header — title only, no wax seal */}
           <h1 className="font-[family-name:var(--font-cinzel)] text-sm text-gold tracking-[0.3em] uppercase mb-8">
             CASE FILING DOCUMENT
@@ -123,10 +143,12 @@ export default function FilePage() {
             <label className="block font-[family-name:var(--font-cinzel)] text-[9px] text-text-secondary tracking-[0.2em] uppercase mb-1.5">
               Code Scroll
             </label>
-            <div
+            <motion.div
               className={`border border-dashed p-8 text-center cursor-pointer transition-colors ${
                 isDragging ? "border-accent bg-bg-raised" : "border-default hover:border-accent"
               }`}
+              animate={isDragging ? { scale: 1.01 } : { scale: 1 }}
+              transition={{ duration: 0.2 }}
               onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
@@ -139,7 +161,27 @@ export default function FilePage() {
                 </div>
               ) : (
                 <div>
-                  <p className="font-[family-name:var(--font-im-fell)] text-[13px] text-text-secondary italic">Drop your code scroll here</p>
+                  {/* File icon SVG */}
+                  <svg
+                    className="mx-auto mb-3"
+                    width="28"
+                    height="32"
+                    viewBox="0 0 28 32"
+                    fill="none"
+                    stroke="var(--gold)"
+                    strokeWidth="1.5"
+                    style={{ opacity: 0.5 }}
+                  >
+                    <path d="M4 2H16L24 10V28C24 29.1 23.1 30 22 30H6C4.9 30 4 29.1 4 28V4C4 2.9 4.9 2 6 2Z" />
+                    <path d="M16 2V10H24" />
+                    <path d="M8 18H20M8 22H16" />
+                  </svg>
+                  <p className="font-[family-name:var(--font-im-fell)] text-[13px] text-text-secondary italic">
+                    Drop your code scroll here
+                  </p>
+                  <p className="font-[family-name:var(--font-im-fell)] text-[11px] text-text-disabled mt-1.5">
+                    or click to browse — .py .js .ts .java and more
+                  </p>
                 </div>
               )}
               <input
@@ -152,7 +194,7 @@ export default function FilePage() {
                   if (file) handleFile(file);
                 }}
               />
-            </div>
+            </motion.div>
           </div>
 
           {/* Language badge */}
@@ -182,23 +224,30 @@ export default function FilePage() {
             <p className="text-danger text-sm mb-4 italic">{error}</p>
           )}
 
-          {/* Submit */}
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSubmitting || !codeContent}
-            className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <span className="inline-block w-4 h-4 border border-gold border-t-transparent rounded-full animate-spin" />
-                Filing the case...
-              </span>
-            ) : (
-              "Bring this case to trial"
-            )}
-          </button>
+          {/* Submit — with hover glow */}
+          <motion.div whileHover={{ boxShadow: "0 0 24px rgba(201,168,76,0.25)" }}>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isSubmitting || !codeContent}
+              className="btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="inline-block w-4 h-4 border border-gold border-t-transparent rounded-full animate-spin" />
+                  Filing the case...
+                </span>
+              ) : (
+                "Bring this case to trial"
+              )}
+            </button>
+          </motion.div>
         </div>
+
+        {/* Footer line */}
+        <p className="mt-4 text-center text-[10px] text-[#5a4f38] tracking-[0.1em] font-[family-name:var(--font-cinzel)]">
+          — LEDGER awaits your submission —
+        </p>
       </div>
     </main>
   );
