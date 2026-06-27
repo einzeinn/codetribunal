@@ -171,7 +171,12 @@ function ArbiterOverlay({
       transition={{ type: "spring", bounce: 0.3, duration: 0.5 }}
     >
       {/* Dimmed backdrop — 3 panels still visible behind */}
-      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="absolute inset-0 bg-black/60"
+        onClick={onClose}
+        role="button"
+        tabIndex={-1}
+      />
 
       {/* ARBITER character centered */}
       <div className="relative z-10 w-[200px] md:w-[260px]">
@@ -406,6 +411,28 @@ export default function CourtroomStage({
             </div>
           ))}
         </div>
+
+        {/* Verdict summary (shown when complete) */}
+        {isComplete && (verdictText || rubricVerdict) && (
+          <div className="mb-2 px-3 py-1.5 border border-border-default/40 bg-bg-raised/60 flex items-center gap-3">
+            {rubricVerdict && (
+              <span
+                className="font-[family-name:var(--font-cinzel)] text-[9px] tracking-[0.2em] uppercase px-2 py-0.5 border"
+                style={{
+                  color: rubricVerdict === "APPROVED" ? "#c9a84c" : rubricVerdict === "REJECTED" ? "#8b2020" : "#888",
+                  borderColor: rubricVerdict === "APPROVED" ? "#c9a84c55" : rubricVerdict === "REJECTED" ? "#8b202055" : "#55555555",
+                }}
+              >
+                {rubricVerdict}
+              </span>
+            )}
+            {verdictText && (
+              <span className="font-[family-name:var(--font-im-fell)] text-[10px] text-text-secondary truncate">
+                {verdictText.length > 80 ? verdictText.slice(0, 80) + "…" : verdictText}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Controls row */}
         <div className="flex items-center justify-between">
