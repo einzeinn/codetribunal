@@ -12,14 +12,10 @@ const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8000";
 const SPEED_OPTIONS = [1, 2, 3] as const;
 type SpeedMultiplier = (typeof SPEED_OPTIONS)[number];
 
-/** Dynamic speaking duration: time for typewriter to finish + reading buffer.
- *  Click-to-advance (VN pattern) lets users skip this, so we keep it tight. */
-function getSpeakingDuration(text: string, speed: number = 1): number {
-  const charCount = text.length;
-  // Base: 40ms per char typewriter + 1200ms reading buffer, floor 1.8s
-  // Then divide entire thing by speed so higher speed = much shorter total
-  return Math.max(1800 / speed, (charCount * 40 + 1200) / speed);
-}
+/** Minimum reading buffer (ms) AFTER text is fully visible.
+ *  This floor is NOT scaled by speed — every dialogue gets at least
+ *  this much reading time so users can always read at any speed. */
+const MIN_READING_BUFFER = 800;
 
 const AGENT_ROLES: Record<string, string> = {
   LEDGER: "Clerk",
@@ -166,14 +162,16 @@ function CourtroomContent() {
           }
         }
 
-        // Phase 1: typewriter runs at 35ms/char, divided by speed
+        // Phase 1: typewriter animation — faster at higher speed
         const speed = speedRef.current;
         const typewriterDuration = (msg.message.length * 35) / speed;
         typewriterTimeoutRef.current = setTimeout(() => {
           setTypewriterDone(true);
-          // Phase 2: reading buffer = total speaking time minus typewriter time
-          const totalDuration = getSpeakingDuration(msg.message, speed);
-          const readingDuration = Math.max(0, totalDuration - typewriterDuration);
+          // Phase 2: reading buffer
+          // MIN_READING_BUFFER floor (never scales with speed) + extra
+          // for long messages (extra DOES scale with speed for noticeable effect)
+          const extraReading = Math.max(0, msg.message.length * 30) / speed;
+          const readingDuration = MIN_READING_BUFFER + extraReading;
           readingBufferTimeoutRef.current = setTimeout(() => {
             advanceTimeoutRef.current = setTimeout(() => {
               setActiveAgent((current) => (current === msg.agent ? "" : current));
