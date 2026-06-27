@@ -94,13 +94,16 @@ export default function CourtroomCharacter({
             <div
               className="h-full flex flex-col p-3 overflow-y-auto"
               style={{
-                background: `rgba(${theme.accentRgb}, 0.15)`,
+                background: "linear-gradient(180deg, rgba(8,8,10,0.78), rgba(8,8,10,0.93))",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
                 borderColor: theme.accent,
                 borderWidth: 1,
                 borderStyle: "solid",
+                boxShadow: "0 -4px 24px rgba(0,0,0,0.45)",
               }}
             >
-              {/* Header */}
+              {/* Header — keep Cinzel for speaker name only */}
               <div className="flex items-center gap-2 mb-1.5 flex-shrink-0">
                 <span
                   className="font-[family-name:var(--font-cinzel)] text-[11px] tracking-[0.15em] uppercase"
@@ -108,17 +111,20 @@ export default function CourtroomCharacter({
                 >
                   {theme.name}
                 </span>
-                <span className="text-[10px] text-text-disabled tracking-[0.1em]">
+                <span className="text-[10px] text-[#777] tracking-[0.1em]">
                   — {theme.role}
                 </span>
               </div>
 
-              {/* Dialogue text — typewriter, readable font */}
-              <p className="text-[13px] text-text-primary leading-[1.7]">
+              {/* Dialogue text — system sans-serif, warm-white, highly readable */}
+              <p
+                className="text-[14px] leading-[1.75]"
+                style={{ color: "#f0ede4", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+              >
                 {displayedText}
                 {/* Blinking cursor while typing */}
                 {visibleChars < (dialogue?.length ?? 0) && (
-                  <span className="inline-block w-[2px] h-[13px] ml-0.5 bg-text-primary align-middle animate-pulse" />
+                  <span className="inline-block w-[2px] h-[14px] ml-0.5 align-middle animate-pulse" style={{ backgroundColor: "#f0ede4" }} />
                 )}
               </p>
             </div>

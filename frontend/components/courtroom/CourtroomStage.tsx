@@ -165,7 +165,7 @@ function ArbiterOverlay({
 }) {
   return (
     <motion.div
-      className="absolute inset-0 z-30 flex items-center justify-center"
+      className="absolute inset-0 z-30 flex flex-col items-center justify-center"
       initial={{ y: -40, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -20, opacity: 0 }}
@@ -173,14 +173,14 @@ function ArbiterOverlay({
     >
       {/* Dimmed backdrop — 3 panels still visible behind */}
       <div
-        className="absolute inset-0 bg-black/60"
+        className="absolute inset-0 bg-black/70"
         onClick={onClose}
         role="button"
         tabIndex={-1}
       />
 
-      {/* ARBITER character centered — large and prominent */}
-      <div className="relative z-10 w-[320px] md:w-[440px]">
+      {/* ARBITER character — full screen height, dominates the stage */}
+      <div className="relative z-10 flex flex-col items-center justify-end h-full max-h-[80vh] w-[380px] md:w-[520px]">
         <CourtroomCharacter
           agentId="arbiter"
           pose="active"
@@ -463,37 +463,74 @@ export default function CourtroomStage({
         </div>
       </div>
 
-      {/* ─── LEDGER character (persistent, bottom-right) ─── */}
-      <button
-        onClick={() => setIsLedgerOpen(true)}
-        className="fixed bottom-2 right-2 z-40 flex flex-col items-center group"
-      >
-        {/* LEDGER sprite */}
-        <Image
-          src={spritePath("ledger", ledgerEntries.length > 0 ? "writing" : "neutral")}
-          alt="LEDGER — Clerk"
-          width={90}
-          height={135}
-          className="w-[70px] md:w-[90px] h-auto select-none transition-all duration-300 group-hover:scale-105"
-          style={{
-            filter: ledgerEntries.length > 0
-              ? `drop-shadow(0 0 8px ${AGENTS.ledger.accent})`
-              : "drop-shadow(0 0 3px rgba(0,0,0,0.5))",
-          }}
-          draggable={false}
-        />
-        {/* Entry count badge overlaid on sprite */}
-        {ledgerEntries.length > 0 && (
-          <div className="flex items-center gap-1 px-2 py-0.5 bg-bg-surface/90 border border-border-default group-hover:border-gold/30 transition-colors">
-            <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold tracking-[0.15em]">
-              LOG
-            </span>
-            <span className="font-[family-name:var(--font-jetbrains)] text-[10px] text-text-secondary bg-bg-raised px-1.5 py-0.5">
-              {ledgerEntries.length}
-            </span>
-          </div>
+      {/* ─── LEDGER character + dialogue (persistent, bottom-right) ─── */}
+      <div className="fixed bottom-2 right-2 z-40 flex items-end gap-2 group">
+        {/* Dialogue text box to the LEFT of the sprite */}
+        {activeSpeaker && toAgentId(activeSpeaker) === "ledger" && activeDialogue && (
+          <motion.div
+            className="max-w-[200px] md:max-w-[240px] p-2.5 mb-6"
+            style={{
+              background: "linear-gradient(180deg, rgba(8,8,10,0.80), rgba(8,8,10,0.93))",
+              backdropFilter: "blur(6px)",
+              WebkitBackdropFilter: "blur(6px)",
+              border: `1px solid ${AGENTS.ledger.accent}`,
+              boxShadow: `0 0 16px rgba(${AGENTS.ledger.accentRgb}, 0.12)`,
+            }}
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 8 }}
+          >
+            <div className="flex items-center gap-1.5 mb-1">
+              <span
+                className="font-[family-name:var(--font-cinzel)] text-[9px] tracking-[0.15em] uppercase"
+                style={{ color: AGENTS.ledger.accent }}
+              >
+                LEDGER
+              </span>
+              <span className="text-[9px] text-[#777] tracking-[0.1em]">
+                — {AGENTS.ledger.role}
+              </span>
+            </div>
+            <p
+              className="text-[12px] leading-[1.65]"
+              style={{ color: "#f0ede4", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}
+            >
+              {activeDialogue.length > 120 ? activeDialogue.slice(0, 120) + "…" : activeDialogue}
+            </p>
+          </motion.div>
         )}
-      </button>
+
+        {/* LEDGER sprite (click opens log panel) */}
+        <button
+          onClick={() => setIsLedgerOpen(true)}
+          className="flex flex-col items-center group/sprite"
+        >
+          <Image
+            src={spritePath("ledger", ledgerEntries.length > 0 ? "writing" : "neutral")}
+            alt="LEDGER — Clerk"
+            width={90}
+            height={135}
+            className="w-[70px] md:w-[90px] h-auto select-none transition-all duration-300 group-hover/sprite:scale-105"
+            style={{
+              filter: ledgerEntries.length > 0
+                ? `drop-shadow(0 0 8px ${AGENTS.ledger.accent})`
+                : "drop-shadow(0 0 3px rgba(0,0,0,0.5))",
+            }}
+            draggable={false}
+          />
+          {/* Entry count badge */}
+          {ledgerEntries.length > 0 && (
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-bg-surface/90 border border-border-default group-hover/sprite:border-gold/30 transition-colors">
+              <span className="font-[family-name:var(--font-cinzel)] text-[9px] text-gold tracking-[0.15em]">
+                LOG
+              </span>
+              <span className="font-[family-name:var(--font-jetbrains)] text-[10px] text-text-secondary bg-bg-raised px-1.5 py-0.5">
+                {ledgerEntries.length}
+              </span>
+            </div>
+          )}
+        </button>
+      </div>
 
       {/* LEDGER toast */}
       <AnimatePresence>

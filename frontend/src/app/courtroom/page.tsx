@@ -64,6 +64,31 @@ function CourtroomContent() {
   const isCompleteRef = useRef(false);
   const wsOpenedRef = useRef(false);
   const redirectedRef = useRef(false);
+  // Defer "completion" WS message until the queue has been fully drained
+  // so the UI doesn't jump to "complete" mid-playback while agents are still speaking
+  const pendingCompletionRef = useRef<Record<string, unknown> | null>(null);
+
+  /** Apply all state updates from the WS "completion" message */
+  const applyCompletion = useCallback((msg: Record<string, unknown>) => {
+    setIsComplete(true);
+    isCompleteRef.current = true;
+    setActiveAgent("");
+    setIsTyping(false);
+    setCurrentPhase("complete");
+    const tokenUsage = msg.token_usage as Record<string, number> | undefined;
+    const conflictClusters = msg.conflict_clusters as ConflictCluster[] | undefined;
+    const rubricScores = msg.rubric_scores as { security?: number; performance?: number; maintainability?: number; verdict?: string } | undefined;
+    if (tokenUsage) setTokenUsage(tokenUsage);
+    if (conflictClusters) setConflictClusters(conflictClusters);
+    if (rubricScores?.verdict) setRubricVerdict(rubricScores.verdict);
+    if (rubricScores) {
+      setScores({
+        security: rubricScores.security ?? 5,
+        performance: rubricScores.performance ?? 5,
+        maintainability: rubricScores.maintainability ?? 5,
+      });
+    }
+  }, []);
 
   const processQueue = useCallback(() => {
     if (isProcessingQueue.current || messageQueueRef.current.length === 0) return;
@@ -73,6 +98,12 @@ function CourtroomContent() {
       if (messageQueueRef.current.length === 0) {
         isProcessingQueue.current = false;
         setIsTyping(false);
+        // Queue empty — now apply any deferred completion payload
+        if (pendingCompletionRef.current) {
+          const pending = pendingCompletionRef.current;
+          pendingCompletionRef.current = null;
+          applyCompletion(pending);
+        }
         return;
       }
 
@@ -83,6 +114,11 @@ function CourtroomContent() {
         if (!msg) {
           isProcessingQueue.current = false;
           setIsTyping(false);
+          if (pendingCompletionRef.current) {
+            const pending = pendingCompletionRef.current;
+            pendingCompletionRef.current = null;
+            applyCompletion(pending);
+          }
           return;
         }
 
@@ -122,7 +158,7 @@ function CourtroomContent() {
     };
 
     processNext();
-  }, []);
+  }, [applyCompletion]);
 
   const connectWebSocket = useCallback(() => {
     if (!sessionId || !mountedRef.current) return;
@@ -147,20 +183,13 @@ function CourtroomContent() {
           messageQueueRef.current.push(msg.data);
           processQueue();
         } else if (msg.type === "completion") {
-          setIsComplete(true);
-          isCompleteRef.current = true;
-          setActiveAgent("");
-          setIsTyping(false);
-          setCurrentPhase("complete");
-          if (msg.token_usage) setTokenUsage(msg.token_usage);
-          if (msg.conflict_clusters) setConflictClusters(msg.conflict_clusters);
-          if (msg.rubric_scores?.verdict) setRubricVerdict(msg.rubric_scores.verdict);
-          if (msg.rubric_scores) {
-            setScores({
-              security: msg.rubric_scores.security ?? 5,
-              performance: msg.rubric_scores.performance ?? 5,
-              maintainability: msg.rubric_scores.maintainability ?? 5,
-            });
+          // Defer completion state updates until the message queue has
+          // fully drained, so agents finish displaying before the UI
+          // transitions to the "complete" / verdict state.
+          if (messageQueueRef.current.length > 0 || isProcessingQueue.current) {
+            pendingCompletionRef.current = msg as Record<string, unknown>;
+          } else {
+            applyCompletion(msg as Record<string, unknown>);
           }
         } else if (msg.type === "error") {
           if (redirectedRef.current) return;
@@ -187,7 +216,7 @@ function CourtroomContent() {
       redirectedRef.current = true;
       router.push("/file");
     };
-  }, [sessionId, processQueue, router]);
+  }, [sessionId, processQueue, router, applyCompletion]);
 
   useEffect(() => {
     mountedRef.current = true;
