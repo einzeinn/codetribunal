@@ -2,6 +2,11 @@
 
 > Where every line of code faces justice
 
+![CodeTribunal Hero](docs/images/hero-page.png)
+![CodeTribunal File Upload](docs/images/file-upload.png)
+![CodeTribunal Courtroom](docs/images/courtroom-trial.png)
+![CodeTribunal Verdict](docs/images/verdict-modal.png)
+
 CodeTribunal is a multi-agent code review system that simulates a medieval courtroom where different AI agents take on roles to review code through adversarial debate. This project was developed for the Qwen Cloud Global AI Hackathon, Track 3: Agent Society.
 
 ## 🎯 Core Concept
@@ -146,13 +151,6 @@ When AXIOM provides AST-level proof of non-usage (e.g., "subprocess is never cal
 - All line ranges are clamped to `total_lines` (stripped of trailing blanks)
 - Reversed ranges (e.g., "lines 66-56") are auto-swapped
 
-## 🎨 UI Aesthetic
-
-- **Theme**: Dark medieval / parchment RPG courtroom
-- **Fonts**: Cinzel (headers/titles) + IM Fell English (body)
-- **Color palette**: Deep black `#0f0c05`, gold `#d4a843`, parchment `#e8d9b0`, muted `#9a7f4a`
-- **Animations**: Streaming debate feed, live score bars, status badges
-
 ## 🎨 Courtroom UI — Visual Novel Courtroom Experience
 
 The courtroom frontend is a full-screen **visual novel-style** interface where the trial unfolds as a cinematic narrative. Key features:
@@ -201,6 +199,11 @@ The courtroom frontend is a full-screen **visual novel-style** interface where t
 - **Dark gradient + backdrop blur**: dialogue boxes use `linear-gradient` + `backdrop-filter: blur(8px)` for legibility over character sprites
 - **System sans-serif font**: dialogue text uses `system-ui` for readability (Cinzel reserved for headers only)
 
+### Atmospheric Visual Design
+- **Hero Page**: Decorative border frames, floating sword animation, diamond accents, agent color dots
+- **File Upload**: Case filing card with corner brackets, gold accent lines, file icon SVG, atmospheric grain texture
+- **Shared atmosphere**: Radial gold glow, faint grain noise overlay, vertical pillar lines
+
 ## 📁 Project Structure
 
 ```
@@ -227,13 +230,19 @@ CodeTribunal/
 │   │   │   └── CourtroomCharacter.tsx # Character sprite + typewriter
 │   │   ├── verdict/                  # Verdict modal
 │   │   ├── proceedings/              # Message feed components
-│   │   └── svg/                      # SVG icon components
+│   │   ├── svg/                      # SVG icon components
+│   │   └── ui/                       # Shared UI components (CourtroomAtmosphere)
 │   ├── lib/
 │   │   └── courtroom-theme.ts        # Agent theme constants + sprite paths
 │   └── src/app/
 │       ├── courtroom/page.tsx        # Courtroom page (WebSocket + queue management)
 │       ├── file/page.tsx             # File upload page
 │       └── page.tsx                  # Hero landing page
+├── docs/
+│   ├── architecture.png              # System architecture diagram
+│   └── images/                       # Preview screenshots
+├── examples/
+│   └── bug_isolation_test.py         # Testing/debugging reference
 ├── requirements.txt                  # Python dependencies
 ├── docker-compose.yml                # Docker Compose for local dev
 ├── Dockerfile                        # Backend Docker image
@@ -293,6 +302,14 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system architecture, protoco
 - **LLM API**: Qwen Cloud (Alibaba Cloud) via `https://dashscope.aliyuncs.com/compatible-mode/v1`
 - **Models**: qwen-max, qwen-plus, qwen-turbo from Alibaba's Qwen family
 - **Evidence**: See `backend/config.py` line 15 for `QWEN_BASE_URL` configuration
+
+## 🎨 UI Aesthetic
+
+- **Theme**: Dark medieval / parchment RPG courtroom
+- **Fonts**: Cinzel (headers/titles) + IM Fell English (body)
+- **Color palette**: Deep black `#0f0c05`, gold `#d4a843`, parchment `#e8d9b0`, muted `#9a7f4a`
+- **Animations**: Streaming debate feed, live score bars, status badges
+- **Atmosphere**: Gold glow effects, grain texture overlays, decorative borders, diamond accents
 
 ## 📄 License
 
